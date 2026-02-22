@@ -2,61 +2,21 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>AYGUN AVM Fiyat Portalı</title>
+<title>Aygun AVM Fiyat Portal</title>
 
 <style>
-body {
-    font-family: Arial, sans-serif;
-    margin: 20px;
-}
-
-h1 {
-    text-align: center;
-}
-
-#searchInput {
-    width: 300px;
-    padding: 8px;
-    margin-bottom: 15px;
-    font-size: 14px;
-}
-
-table {
-    border-collapse: collapse;
-    width: 100%;
-    font-size: 13px;
-}
-
-th {
-    background-color: #222;
-    color: white;
-    padding: 8px;
-}
-
-td {
-    padding: 6px;
-    border-bottom: 1px solid #ddd;
-}
-
-tr:hover {
-    background-color: #f2f2f2;
-}
-
-.price {
-    text-align: right;
-}
-
-.stok-0 {
-    background-color: #ffe6e6;
-    color: red;
-    font-weight: bold;
-}
+body { font-family: Arial; margin:20px; }
+input { padding:8px; width:300px; margin-bottom:15px; }
+table { border-collapse: collapse; width:100%; }
+th, td { border:1px solid #ccc; padding:6px; font-size:14px; }
+th { background:#f2f2f2; }
+tr:hover { background:#f9f9f9; }
 </style>
-</head>
 
+</head>
 <body>
 
-<h1>AYGUN AVM Fiyat Listesi</h1>
+<h2>Aygun AVM Fiyat Listesi</h2>
 
 <input type="text" id="searchInput" placeholder="Ürün kodu veya açıklama ara...">
 
@@ -78,48 +38,54 @@ tr:hover {
 </table>
 
 <script>
+
+let urunData = [];
+
 fetch('data/urunler.json')
 .then(res => res.json())
 .then(data => {
+    urunData = data;
+    tabloyuDoldur(data);
+})
+.catch(err => console.error("JSON yüklenemedi:", err));
 
-    const tbody = document.querySelector('#urunTable tbody');
+function tabloyuDoldur(data){
+
+    const tbody = document.querySelector("#urunTable tbody");
+    tbody.innerHTML = "";
 
     data.forEach(item => {
 
-        const row = document.createElement('tr');
-
-        if(item.stok === "0"){
-            row.classList.add("stok-0");
-        }
+        const row = document.createElement("tr");
 
         row.innerHTML = `
-            <td>${item.kod || ''}</td>
-            <td>${item.ticari_kod || ''}</td>
-            <td>${item.stok || ''}</td>
-            <td class="price">${item.diger_kartlar || ''}</td>
-            <td class="price">${item.taksitli || ''}</td>
-            <td class="price">${item.tek_cekim || ''}</td>
-            <td class="price">${item.nakit || ''}</td>
-            <td>${item.urun_gami || ''}</td>
-            <td>${item.aciklama || ''}</td>
+            <td>${item.kod || ""}</td>
+            <td>${item.ticari_kod || ""}</td>
+            <td>${item.stok || ""}</td>
+            <td>${item.diger_kartlar || ""}</td>
+            <td>${item.taksitli || ""}</td>
+            <td>${item.tek_cekim || ""}</td>
+            <td>${item.nakit || ""}</td>
+            <td>${item.urun_gami || ""}</td>
+            <td>${item.aciklama || ""}</td>
         `;
 
         tbody.appendChild(row);
     });
+}
 
-    // ARAMA
-    document.getElementById("searchInput").addEventListener("keyup", function() {
-        const value = this.value.toLowerCase();
-        const rows = tbody.getElementsByTagName("tr");
+document.getElementById("searchInput").addEventListener("keyup", function(){
 
-        for(let i = 0; i < rows.length; i++){
-            const text = rows[i].innerText.toLowerCase();
-            rows[i].style.display = text.includes(value) ? "" : "none";
-        }
-    });
+    const value = this.value.toLowerCase();
 
-})
-.catch(err => console.error("JSON yüklenemedi:", err));
+    const filtreli = urunData.filter(item =>
+        (item.kod && item.kod.toLowerCase().includes(value)) ||
+        (item.aciklama && item.aciklama.toLowerCase().includes(value))
+    );
+
+    tabloyuDoldur(filtreli);
+});
+
 </script>
 
 </body>
