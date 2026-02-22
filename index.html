@@ -2,23 +2,47 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<title>Aygun AVM Fiyat Portal</title>
-
+<title>Aygün AVM Fiyat Listesi</title>
 <style>
-body { font-family: Arial; margin:20px; }
-input { padding:8px; width:300px; margin-bottom:15px; }
-table { border-collapse: collapse; width:100%; }
-th, td { border:1px solid #ccc; padding:6px; font-size:14px; }
-th { background:#f2f2f2; }
-tr:hover { background:#f9f9f9; }
+body{font-family:Arial;background:#f4f4f4;margin:0;padding:20px}
+.container{max-width:1200px;margin:auto}
+.card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,0.1)}
+input{padding:8px;margin:5px 0;width:100%;box-sizing:border-box}
+button{padding:8px 15px;border:none;border-radius:5px;background:#007bff;color:#fff;cursor:pointer}
+button:hover{background:#0056b3}
+table{width:100%;border-collapse:collapse;margin-top:15px}
+th,td{padding:8px;border:1px solid #ddd;text-align:left;font-size:13px}
+th{background:#007bff;color:#fff}
+.stok-kirmizi{background:#ffdddd}
+.stok-yesil{background:#ddffdd}
+.hidden{display:none}
+.topbar{display:flex;justify-content:space-between;align-items:center}
+.small{font-size:12px;color:#666}
 </style>
-
 </head>
 <body>
 
-<h2>Aygun AVM Fiyat Listesi</h2>
+<div class="container">
 
-<input type="text" id="searchInput" placeholder="Ürün kodu veya açıklama ara...">
+<div id="loginCard" class="card">
+<h2>Giriş Yap</h2>
+<input type="text" id="email" placeholder="Mail adresi">
+<input type="password" id="password" placeholder="Şifre">
+<button onclick="login()">Giriş</button>
+<p id="loginError" style="color:red"></p>
+</div>
+
+<div id="mainApp" class="hidden">
+<div class="card">
+<div class="topbar">
+<h2>Fiyat Listesi</h2>
+<div>
+<button onclick="showChangePass()">Şifre Değiştir</button>
+<button onclick="logout()">Çıkış</button>
+</div>
+</div>
+
+<input type="text" id="search" placeholder="Kod, Ticari Kod, Açıklama, Ürün Gamı ara..." onkeyup="renderTable()">
 
 <table id="urunTable">
 <thead>
@@ -26,8 +50,7 @@ tr:hover { background:#f9f9f9; }
 <th>Kod</th>
 <th>Ticari Kod</th>
 <th>Stok</th>
-<th>Diğer Kartlar</th>
-<th>Taksitli</th>
+<th>4T</th>
 <th>Tek Çekim</th>
 <th>Nakit</th>
 <th>Ürün Gamı</th>
@@ -36,57 +59,126 @@ tr:hover { background:#f9f9f9; }
 </thead>
 <tbody></tbody>
 </table>
+<p class="small">Versiyon: <span id="version"></span></p>
+</div>
+</div>
+
+<div id="changePassCard" class="card hidden">
+<h3>Şifre Değiştir</h3>
+<input type="password" id="newPass" placeholder="Yeni şifre">
+<button onclick="changePassword()">Kaydet</button>
+<button onclick="hideChangePass()">İptal</button>
+<p id="changeInfo" class="small"></p>
+</div>
+
+</div>
 
 <script>
+let users=[]
+let products=[]
+let currentUser=null
 
-let urunData = [];
+fetch("data/kullanicilar.json")
+.then(r=>r.json())
+.then(data=>users=data)
 
-fetch('data/urunler.json')
-.then(res => res.json())
-.then(data => {
-    urunData = data;
-    tabloyuDoldur(data);
+fetch("data/urunler.json")
+.then(r=>r.json())
+.then(data=>{
+products=data
+document.getElementById("version").innerText=new Date().toLocaleString()
 })
-.catch(err => console.error("JSON yüklenemedi:", err));
 
-function tabloyuDoldur(data){
+function login(){
+let email=document.getElementById("email").value.trim()
+let pass=document.getElementById("password").value.trim()
+let error=document.getElementById("loginError")
 
-    const tbody = document.querySelector("#urunTable tbody");
-    tbody.innerHTML = "";
-
-    data.forEach(item => {
-
-        const row = document.createElement("tr");
-
-        row.innerHTML = `
-            <td>${item.kod || ""}</td>
-            <td>${item.ticari_kod || ""}</td>
-            <td>${item.stok || ""}</td>
-            <td>${item.diger_kartlar || ""}</td>
-            <td>${item.taksitli || ""}</td>
-            <td>${item.tek_cekim || ""}</td>
-            <td>${item.nakit || ""}</td>
-            <td>${item.urun_gami || ""}</td>
-            <td>${item.aciklama || ""}</td>
-        `;
-
-        tbody.appendChild(row);
-    });
+let lock=localStorage.getItem("lock_"+email)
+if(lock==="true"){
+error.innerText="Hesap kilitli!"
+return
 }
 
-document.getElementById("searchInput").addEventListener("keyup", function(){
+let user=users.find(u=>u.Email.toLowerCase()===email.toLowerCase())
+if(!user){ error.innerText="Kullanıcı yok"; return }
 
-    const value = this.value.toLowerCase();
+let localPass=localStorage.getItem("pass_"+email)
+let truePass=localPass?localPass:user.Sifre
 
-    const filtreli = urunData.filter(item =>
-        (item.kod && item.kod.toLowerCase().includes(value)) ||
-        (item.aciklama && item.aciklama.toLowerCase().includes(value))
-    );
+if(pass===truePass){
+currentUser=email
+document.getElementById("loginCard").classList.add("hidden")
+document.getElementById("mainApp").classList.remove("hidden")
+renderTable()
+}else{
+let attempts=Number(localStorage.getItem("attempt_"+email))||0
+attempts++
+localStorage.setItem("attempt_"+email,attempts)
+if(attempts>=3){
+localStorage.setItem("lock_"+email,"true")
+error.innerText="3 Hatalı giriş. Hesap kilitlendi."
+}else{
+error.innerText="Şifre yanlış"
+}
+}
+}
 
-    tabloyuDoldur(filtreli);
-});
+function logout(){
+location.reload()
+}
+
+function renderTable(){
+let search=document.getElementById("search").value.toLowerCase()
+let tbody=document.querySelector("#urunTable tbody")
+tbody.innerHTML=""
+
+products
+.filter(p=>
+p.Kod.toLowerCase().includes(search)||
+p.TicariKod.toLowerCase().includes(search)||
+p.Aciklama.toLowerCase().includes(search)||
+p.UrunGami.toLowerCase().includes(search)
+)
+.forEach(p=>{
+let tr=document.createElement("tr")
+
+if(p.Stok==0) tr.classList.add("stok-kirmizi")
+if(p.Stok>8) tr.classList.add("stok-yesil")
+
+tr.innerHTML=`
+<td>${p.Kod}</td>
+<td>${p.TicariKod}</td>
+<td>${p.Stok}</td>
+<td>${format(p.Taksit4)}</td>
+<td>${format(p.TekCekim)}</td>
+<td>${format(p.Nakit)}</td>
+<td>${p.UrunGami}</td>
+<td>${p.Aciklama}</td>
+`
+tbody.appendChild(tr)
+})
+}
+
+function format(x){
+return Number(x).toLocaleString("tr-TR")
+}
+
+function showChangePass(){
+document.getElementById("changePassCard").classList.remove("hidden")
+}
+
+function hideChangePass(){
+document.getElementById("changePassCard").classList.add("hidden")
+}
+
+function changePassword(){
+let newPass=document.getElementById("newPass").value
+if(!newPass){ return }
+localStorage.setItem("pass_"+currentUser,newPass)
+document.getElementById("changeInfo").innerText="Şifre değiştirildi (Excel güncellenene kadar geçici)"
+}
 
 </script>
-
 </body>
 </html>
