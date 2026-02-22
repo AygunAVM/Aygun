@@ -1,0 +1,47 @@
+<!-- Tablo elementini ekleyelim -->
+<table id="urunTable" border="1" cellspacing="0" cellpadding="4">
+    <thead>
+        <tr>
+            <th>Kod</th>
+            <th>Ticari Kod</th>
+            <th>Stok</th>
+            <th>Diğer Kartlar</th>
+            <th>Taksitli</th>
+            <th>Tek Çekim</th>
+            <th>Nakit</th>
+            <th>Ürün Gamı</th>
+            <th>Açıklama</th>
+        </tr>
+    </thead>
+    <tbody>
+        <!-- JS ile doldurulacak -->
+    </tbody>
+</table>
+
+<script>
+fetch('data/urunler.json')
+.then(res => res.json())
+.then(data => {
+    const tbody = document.querySelector('#urunTable tbody');
+    
+    data.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Boş veya hatalı alanları güvenli şekilde göster
+        row.innerHTML = `
+            <td>${item.kod || ''}</td>
+            <td>${item.ticari_kod || ''}</td>
+            <td>${item.stok || ''}</td>
+            <td>${item.diger_kartlar === "#DEĞER!" ? '' : item.diger_kartlar}</td>
+            <td>${item.taksitli || ''}</td>
+            <td>${item.tek_cekim || ''}</td>
+            <td>${item.nakit || ''}</td>
+            <td>${item.urun_gami || ''}</td>
+            <td>${item.aciklama || ''}</td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+})
+.catch(err => console.error('JSON yüklenemedi:', err));
+</script>
