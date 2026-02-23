@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Aygün AVM Fiyat Listesi</title>
+
 <style>
 body{font-family:Arial;background:#f4f4f4;margin:0;padding:20px}
 .container{max-width:1200px;margin:auto}
@@ -36,10 +37,7 @@ th{background:#007bff;color:#fff}
 <div class="card">
 <div class="topbar">
 <h2>Fiyat Listesi</h2>
-<div>
-<button onclick="showChangePass()">Şifre Değiştir</button>
 <button onclick="logout()">Çıkış</button>
-</div>
 </div>
 
 <input type="text" id="search" placeholder="Kod, Ticari Kod, Açıklama, Ürün Gamı ara..." onkeyup="renderTable()">
@@ -59,88 +57,94 @@ th{background:#007bff;color:#fff}
 </thead>
 <tbody></tbody>
 </table>
-<p class="small">Versiyon: <span id="version"></span></p>
-</div>
-</div>
 
-<div id="changePassCard" class="card hidden">
-<h3>Şifre Değiştir</h3>
-<input type="password" id="newPass" placeholder="Yeni şifre">
-<button onclick="changePassword()">Kaydet</button>
-<button onclick="hideChangePass()">İptal</button>
-<p id="changeInfo" class="small"></p>
+<p class="small">Versiyon: <span id="version"></span></p>
+
+</div>
 </div>
 
 </div>
 
 <script>
+
 let users=[]
 let products=[]
 let currentUser=null
 
-fetch("data/kullanicilar.json")
-.then(r=>r.json())
-.then(data=>users=data)
+// CACHE BYPASS
+const noCache="?v="+new Date().getTime()
 
-fetch("data/urunler.json")
-.then(r=>r.json())
-.then(data=>{
-products=data
+Promise.all([
+fetch("data/kullanicilar.json"+noCache).then(r=>r.json()),
+fetch("data/urunler.json"+noCache).then(r=>r.json())
+])
+.then(([u,p])=>{
+users=u
+products=p
 document.getElementById("version").innerText=new Date().toLocaleString()
 })
+.catch(e=>console.error("JSON yükleme hatası:",e))
 
+
+// ======= JS SIMPLE HASH (VBA ile aynı mantık) =======
+function simpleHash(str){
+
+let result=5381
+
+for(let i=0;i<str.length;i++){
+result=(result*33+str.charCodeAt(i))%1000000000
+}
+
+return result.toString(16)
+}
+
+
+// ======= LOGIN =======
 function login(){
-let email=document.getElementById("email").value.trim()
+
+let email=document.getElementById("email").value.trim().toLowerCase()
 let pass=document.getElementById("password").value.trim()
 let error=document.getElementById("loginError")
 
-let lock=localStorage.getItem("lock_"+email)
-if(lock==="true"){
-error.innerText="Hesap kilitli!"
+let user=users.find(u=>u.Email.toLowerCase()===email)
+
+if(!user){
+error.innerText="Kullanıcı bulunamadı"
 return
 }
 
-let user=users.find(u=>u.Email.toLowerCase()===email.toLowerCase())
-if(!user){ error.innerText="Kullanıcı yok"; return }
+let hashed=simpleHash(pass)
 
-let localPass=localStorage.getItem("pass_"+email)
-let truePass=localPass?localPass:user.Sifre
+if(hashed===user.Hash){
 
-if(pass===truePass){
 currentUser=email
 document.getElementById("loginCard").classList.add("hidden")
 document.getElementById("mainApp").classList.remove("hidden")
 renderTable()
-}else{
-let attempts=Number(localStorage.getItem("attempt_"+email))||0
-attempts++
-localStorage.setItem("attempt_"+email,attempts)
-if(attempts>=3){
-localStorage.setItem("lock_"+email,"true")
-error.innerText="3 Hatalı giriş. Hesap kilitlendi."
+
 }else{
 error.innerText="Şifre yanlış"
 }
-}
+
 }
 
-function logout(){
-location.reload()
-}
 
+// ======= TABLE =======
 function renderTable(){
+
 let search=document.getElementById("search").value.toLowerCase()
 let tbody=document.querySelector("#urunTable tbody")
 tbody.innerHTML=""
 
 products
 .filter(p=>
-p.Kod.toLowerCase().includes(search)||
-p.TicariKod.toLowerCase().includes(search)||
-p.Aciklama.toLowerCase().includes(search)||
-p.UrunGami.toLowerCase().includes(search)
+(p.Kod||"").toLowerCase().includes(search)||
+(p.TicariKod||"").toLowerCase().includes(search)||
+(p.Aciklama||"").toLowerCase().includes(search)||
+(p.UrunGami||"").toLowerCase().includes(search)
 )
 .forEach(p=>{
+
 let tr=document.createElement("tr")
 
 if(p.Stok==0) tr.classList.add("stok-kirmizi")
@@ -156,29 +160,24 @@ tr.innerHTML=`
 <td>${p.UrunGami}</td>
 <td>${p.Aciklama}</td>
 `
+
 tbody.appendChild(tr)
+
 })
+
 }
+
 
 function format(x){
-return Number(x).toLocaleString("tr-TR")
+return Number(x||0).toLocaleString("tr-TR")
 }
 
-function showChangePass(){
-document.getElementById("changePassCard").classList.remove("hidden")
-}
 
-function hideChangePass(){
-document.getElementById("changePassCard").classList.add("hidden")
-}
-
-function changePassword(){
-let newPass=document.getElementById("newPass").value
-if(!newPass){ return }
-localStorage.setItem("pass_"+currentUser,newPass)
-document.getElementById("changeInfo").innerText="Şifre değiştirildi (Excel güncellenene kadar geçici)"
+function logout(){
+location.reload()
 }
 
 </script>
+
 </body>
 </html>
