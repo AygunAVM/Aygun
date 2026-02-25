@@ -1,183 +1,148 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<title>Aygün AVM Fiyat Listesi</title>
-
-<style>
-body{font-family:Arial;background:#f4f4f4;margin:0;padding:20px}
-.container{max-width:1200px;margin:auto}
-.card{background:#fff;padding:20px;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,0.1)}
-input{padding:8px;margin:5px 0;width:100%;box-sizing:border-box}
-button{padding:8px 15px;border:none;border-radius:5px;background:#007bff;color:#fff;cursor:pointer}
-button:hover{background:#0056b3}
-table{width:100%;border-collapse:collapse;margin-top:15px}
-th,td{padding:8px;border:1px solid #ddd;text-align:left;font-size:13px}
-th{background:#007bff;color:#fff}
-.stok-kirmizi{background:#ffdddd}
-.stok-yesil{background:#ddffdd}
-.hidden{display:none}
-.topbar{display:flex;justify-content:space-between;align-items:center}
-.small{font-size:12px;color:#666}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiyat Listesi</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        #login-area { display: flex; flex-direction: column; max-width: 300px; margin: 50px auto; }
+        #login-area input, #login-area button { margin-bottom: 10px; padding: 10px; }
+        #table-area { display: none; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header-bar h1 { margin: 0; }
+        .header-bar button { padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        input[type="text"] { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
+        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #3b82f6; color: white; }
+        .version-info { font-size: 12px; color: #666; margin-top: 5px; }
+    </style>
 </head>
 <body>
 
-<div class="container">
-
-<div id="loginCard" class="card">
-<h2>Giriş Yap</h2>
-<input type="text" id="email" placeholder="Mail adresi">
-<input type="password" id="password" placeholder="Şifre">
-<button onclick="login()">Giriş</button>
-<p id="loginError" style="color:red"></p>
+<div class="container" id="login-area">
+    <h2>Giriş Yap</h2>
+    <input type="text" id="username" placeholder="Kullanıcı Adı">
+    <input type="password" id="password" placeholder="Şifre">
+    <button onclick="login()">Giriş</button>
 </div>
 
-<div id="mainApp" class="hidden">
-<div class="card">
-<div class="topbar">
-<h2>Fiyat Listesi</h2>
-<button onclick="logout()">Çıkış</button>
-</div>
-
-<input type="text" id="search" placeholder="Kod, Ticari Kod, Açıklama, Ürün Gamı ara..." onkeyup="renderTable()">
-
-<table id="urunTable">
-<thead>
-<tr>
-<th>Kod</th>
-<th>Ticari Kod</th>
-<th>Stok</th>
-<th>4T</th>
-<th>Tek Çekim</th>
-<th>Nakit</th>
-<th>Ürün Gamı</th>
-<th>Açıklama</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<p class="small">Versiyon: <span id="version"></span></p>
-
-</div>
-</div>
-
+<div class="container" id="table-area">
+    <div class="header-bar">
+        <h2>Fiyat Listesi</h2>
+        <button onclick="logout()">Çıkış</button>
+    </div>
+    
+    <input type="text" id="searchInput" placeholder="Kod, Ticari Kod, Açıklama, Ürün Gamı ara..." onkeyup="searchTable()">
+    
+    <div style="overflow-x:auto;">
+        <table id="productTable">
+            <thead>
+                <tr>
+                    <th>Kod</th>
+                    <th>Ticari Kod</th>
+                    <th>Stok</th>
+                    <th>Diğer Kartlar</th>
+                    <th>4T A•M•W</th>
+                    <th>Tek Çekim</th>
+                    <th>Nakit</th>
+                    <th>Ürün Gamı</th>
+                    <th>Açıklama</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </div>
+    <div class="version-info" id="versionText">Versiyon: Yükleniyor...</div>
 </div>
 
 <script>
+    let globalProducts = [];
 
-let users=[]
-let products=[]
-let currentUser=null
+    async function login() {
+        const username = document.getElementById('username').value;
+        const pass = document.getElementById('password').value;
 
-// CACHE BYPASS
-const noCache="?v="+new Date().getTime()
+        try {
+            // Önbellek sorunlarını aşmak için URL sonuna timestamp ekledik
+            const timestamp = new Date().getTime();
+            const [userRes, prodRes] = await Promise.all([
+                fetch('https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/kullanicilar.json?v=' + timestamp),
+                fetch('https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/urunler.json?v=' + timestamp)
+            ]);
 
-Promise.all([
-fetch("data/kullanicilar.json"+noCache).then(r=>r.json()),
-fetch("data/urunler.json"+noCache).then(r=>r.json())
-])
-.then(([u,p])=>{
-users=u
-products=p
-document.getElementById("version").innerText=new Date().toLocaleString()
-})
-.catch(e=>console.error("JSON yükleme hatası:",e))
+            const users = await userRes.json();
+            const productResponse = await prodRes.json();
+            
+            // HATA BURADAYDI: JSON içindeki .data kısmını alıyoruz
+            globalProducts = productResponse.data || [];
 
+            const user = users.find(u => u.KullaniciAdi === username && String(u.Sifre) === pass);
 
-// ======= JS SIMPLE HASH (VBA ile aynı mantık) =======
-function simpleHash(str){
+            if (user) {
+                document.getElementById('login-area').style.display = 'none';
+                document.getElementById('table-area').style.display = 'block';
+                
+                if (productResponse.metadata && productResponse.metadata.v) {
+                    document.getElementById('versionText').innerText = "Son Güncelleme: " + productResponse.metadata.v;
+                }
 
-let result=5381
+                // Tüm ürünleri tabloya bas
+                renderTable(globalProducts);
+            } else {
+                alert("Hatalı kullanıcı adı veya şifre!");
+            }
+        } catch (error) {
+            console.error("Veri yükleme hatası:", error);
+            alert("Veriler alınamadı. GitHub bağlantınızı kontrol edin.");
+        }
+    }
 
-for(let i=0;i<str.length;i++){
-result=(result*33+str.charCodeAt(i))%1000000000
-}
+    function renderTable(products) {
+        const tbody = document.querySelector('#productTable tbody');
+        tbody.innerHTML = ''; 
 
-return result.toString(16)
-}
+        products.forEach(p => {
+            const row = `<tr>
+                <td>${p.Kod || ''}</td>
+                <td>${p.TicariKod || ''}</td>
+                <td>${p.Stok || ''}</td>
+                <td>${p.DigerKartlar || ''}</td> 
+                <td>${p.T4AMW || ''}</td>
+                <td>${p.TekCekim || ''}</td>
+                <td>${p.Nakit || ''}</td>
+                <td>${p.UrunGami || ''}</td>
+                <td>${p.Aciklama || ''}</td>
+            </tr>`;
+            tbody.insertAdjacentHTML('beforeend', row);
+        });
+    }
 
+    function searchTable() {
+        const searchText = document.getElementById('searchInput').value.toLowerCase();
+        
+        const filtered = globalProducts.filter(p => {
+            return (
+                (p.Kod && p.Kod.toString().toLowerCase().includes(searchText)) ||
+                (p.TicariKod && p.TicariKod.toString().toLowerCase().includes(searchText)) ||
+                (p.Aciklama && p.Aciklama.toString().toLowerCase().includes(searchText)) ||
+                (p.UrunGami && p.UrunGami.toString().toLowerCase().includes(searchText))
+            );
+        });
+        
+        renderTable(filtered);
+    }
 
-// ======= LOGIN =======
-function login(){
-
-let email=document.getElementById("email").value.trim().toLowerCase()
-let pass=document.getElementById("password").value.trim()
-let error=document.getElementById("loginError")
-
-let user=users.find(u=>u.Email.toLowerCase()===email)
-
-if(!user){
-error.innerText="Kullanıcı bulunamadı"
-return
-}
-
-let hashed=simpleHash(pass)
-
-if(hashed===user.Hash){
-
-currentUser=email
-document.getElementById("loginCard").classList.add("hidden")
-document.getElementById("mainApp").classList.remove("hidden")
-renderTable()
-
-}else{
-error.innerText="Şifre yanlış"
-}
-
-}
-
-
-// ======= TABLE =======
-function renderTable(){
-
-let search=document.getElementById("search").value.toLowerCase()
-let tbody=document.querySelector("#urunTable tbody")
-tbody.innerHTML=""
-
-products
-.filter(p=>
-(p.Kod||"").toLowerCase().includes(search)||
-(p.TicariKod||"").toLowerCase().includes(search)||
-(p.Aciklama||"").toLowerCase().includes(search)||
-(p.UrunGami||"").toLowerCase().includes(search)
-)
-.forEach(p=>{
-
-let tr=document.createElement("tr")
-
-if(p.Stok==0) tr.classList.add("stok-kirmizi")
-if(p.Stok>8) tr.classList.add("stok-yesil")
-
-tr.innerHTML=`
-<td>${p.Kod}</td>
-<td>${p.TicariKod}</td>
-<td>${p.Stok}</td>
-<td>${format(p.Taksit4)}</td>
-<td>${format(p.TekCekim)}</td>
-<td>${format(p.Nakit)}</td>
-<td>${p.UrunGami}</td>
-<td>${p.Aciklama}</td>
-`
-
-tbody.appendChild(tr)
-
-})
-
-}
-
-
-function format(x){
-return Number(x||0).toLocaleString("tr-TR")
-}
-
-
-function logout(){
-location.reload()
-}
-
+    function logout() {
+        document.getElementById('login-area').style.display = 'block';
+        document.getElementById('table-area').style.display = 'none';
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+        document.querySelector('#productTable tbody').innerHTML = '';
+    }
 </script>
-
 </body>
 </html>
