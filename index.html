@@ -3,120 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aygün AVM - Fiyat Listesi</title>
+    <title>Aygün AVM | Fiyat Listesi</title>
     <style>
-        body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
-        .box { max-width: 1300px; margin: auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        #login-area { max-width: 350px; margin-top: 100px; text-align: center; }
-        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-        button { width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        #table-area { display: none; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { background: #2563eb; color: white; padding: 10px; text-align: left; position: sticky; top: 0; }
-        td { border-bottom: 1px solid #eee; padding: 10px; }
-        tr:hover { background: #f8fafc; }
-        .v-info { font-size: 11px; color: #888; margin-top: 15px; }
+        :root { --primary: #007bff; --dark: #343a40; --success: #28a745; --danger: #dc3545; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; margin: 0; padding: 15px; }
+        .card { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 1400px; margin: auto; }
+        #loginArea { max-width: 380px; text-align: center; margin-top: 80px; }
+        input { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .hidden { display: none; }
+        .table-container { overflow-x: auto; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
+        th { background: var(--primary); color: white; padding: 12px; text-align: left; position: sticky; top: 0; }
+        td { padding: 10px; border-bottom: 1px solid #eee; }
+        .stok-yok { background: #fff5f5 !important; color: var(--danger); }
+        .nakit-vurgu { color: var(--success); font-weight: bold; }
+        .filter-buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 15px; }
+        .filter-buttons button { width: auto; padding: 6px 12px; background: #6c757d; font-size: 12px; }
+        .filter-buttons button.active { background: var(--dark); }
     </style>
 </head>
 <body>
 
-    <div id="login-area" class="box">
-        <h2>Aygün AVM Giriş</h2>
-        <input type="text" id="username" placeholder="Kullanıcı Adı">
-        <input type="password" id="password" placeholder="Şifre">
-        <button type="button" onclick="login()">SİSTEME GİRİŞ YAP</button>
+<div id="loginArea" class="card">
+    <h2>Aygün AVM Giriş</h2>
+    <input type="text" id="email" placeholder="E-posta / Kullanıcı Adı">
+    <input type="password" id="sifre" placeholder="Şifre">
+    <button onclick="girisYap()">Giriş Yap</button>
+</div>
+
+<div id="app" class="card hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3>Fiyat Listesi</h3>
+        <button onclick="cikisYap()" style="width:auto; background:var(--danger); padding:5px 15px;">Çıkış</button>
     </div>
+    <p id="guncelleme" style="font-size:11px; color:gray;"></p>
+    
+    <input type="text" id="arama" placeholder="Hızlı ara (Kod, Model...)" onkeyup="tabloyuCiz()">
+    <div id="gamiFiltre" class="filter-buttons"></div>
+    <input type="hidden" id="aktifGam" value="">
 
-    <div id="table-area" class="box">
-        <div class="header">
-            <h2>Ürün Fiyat Listesi</h2>
-            <button style="width:100px; background:#dc2626;" onclick="location.reload()">Çıkış</button>
-        </div>
-        
-        <input type="text" id="searchInput" placeholder="Kod, Ticari Kod veya Açıklama ile ara..." onkeyup="search()">
-        
-        <div style="overflow-x:auto;">
-            <table id="pTable">
-                <thead>
-                    <tr>
-                        <th>Kod</th>
-                        <th>Ticari Kod</th>
-                        <th>Stok</th>
-                        <th>Diğer Kartlar</th>
-                        <th>4T A•M•W</th>
-                        <th>Tek Çekim</th>
-                        <th>Nakit</th>
-                        <th>Ürün Gamı</th>
-                        <th>Açıklama</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-        </div>
-        <div id="version" class="v-info"></div>
+    <div class="table-container">
+        <table id="urunTablosu">
+            <thead>
+                <tr>
+                    <th>Kod</th>
+                    <th>Ticari Kod</th>
+                    <th>Stok</th>
+                    <th>Diğer Kartlar</th>
+                    <th>4T</th>
+                    <th>Tek Çekim</th>
+                    <th>Nakit</th>
+                    <th>Ürün Gamı</th>
+                    <th>Açıklama</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
     </div>
+</div>
 
-    <script>
-        let allData = [];
+<script>
+let tumUrunler = [];
 
-        async function login() {
-            const u = document.getElementById('username').value.trim();
-            const p = document.getElementById('password').value.trim();
-            const ts = new Date().getTime();
+// Sayfa yüklendiğinde oturumu kontrol et
+window.onload = function() {
+    const session = localStorage.getItem("aygun_auth");
+    if(session === "true") appiAc();
+};
 
-            try {
-                const [uRes, pRes] = await Promise.all([
-                    fetch(`https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/kullanicilar.json?t=${ts}`),
-                    fetch(`https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/urunler.json?t=${ts}`)
-                ]);
+async function girisYap() {
+    const mail = document.getElementById("email").value.trim().toLowerCase();
+    const pass = document.getElementById("sifre").value.trim();
 
-                const users = await uRes.json();
-                const products = await pRes.json();
+    if(!mail || !pass) { alert("Lütfen alanları doldurun"); return; }
 
-                // Şifre kontrolünde metin/sayı ayrımını ortadan kaldırıyoruz
-                const user = users.find(x => x.KullaniciAdi === u && String(x.Sifre) === String(p));
+    try {
+        const r = await fetch('data/kullanicilar.json?v=' + Date.now());
+        if(!r.ok) throw new Error("Dosya bulunamadı");
+        const users = await r.json();
 
-                if (user) {
-                    allData = products.data || [];
-                    document.getElementById('login-area').style.display = 'none';
-                    document.getElementById('table-area').style.display = 'block';
-                    document.getElementById('version').innerText = "Son Güncelleme: " + (products.metadata ? products.metadata.v : "");
-                    render(allData);
-                } else {
-                    alert("Kullanıcı adı veya şifre hatalı! (Lütfen Excel'den makroyu tekrar çalıştırın)");
-                }
-            } catch (err) {
-                alert("Bağlantı hatası: Dosyalar okunamadı.");
-            }
+        const user = users.find(u => 
+            String(u.Email).toLowerCase() === mail && 
+            String(u.Sifre) === pass
+        );
+
+        if(user) {
+            localStorage.setItem("aygun_auth", "true");
+            appiAc();
+        } else {
+            alert("Hatalı Giriş! Lütfen bilgilerinizi kontrol edin.");
         }
+    } catch(e) {
+        alert("Bağlantı Hatası: Kullanıcı verilerine ulaşılamıyor. Lütfen Excel'den 'TumJSONGuncelle' yapın.");
+    }
+}
 
-        function render(data) {
-            const tbody = document.querySelector('#pTable tbody');
-            tbody.innerHTML = '';
-            data.forEach(item => {
-                const tr = `<tr>
-                    <td><b>${item.Kod || ''}</b></td>
-                    <td>${item.TicariKod || ''}</td>
-                    <td>${item.Stok || '0'}</td>
-                    <td style="color:green; font-weight:bold;">${item.DigerKartlar || ''}</td>
-                    <td>${item.T4AMW || ''}</td>
-                    <td>${item.TekCekim || ''}</td>
-                    <td style="color:red; font-weight:bold;">${item.Nakit || ''}</td>
-                    <td>${item.UrunGami || ''}</td>
-                    <td>${item.Açıklama || item.Aciklama || ''}</td>
-                </tr>`;
-                tbody.insertAdjacentHTML('beforeend', tr);
-            });
-        }
+function appiAc() {
+    document.getElementById("loginArea").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+    veriyiGetir();
+}
 
-        function search() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allData.filter(x => 
-                Object.values(x).some(v => String(v).toLowerCase().includes(query))
-            );
-            render(filtered);
-        }
-    </script>
+function cikisYap() {
+    localStorage.removeItem("aygun_auth");
+    location.reload();
+}
+
+async function veriyiGetir() {
+    try {
+        const r = await fetch('data/urunler.json?v=' + Date.now());
+        const res = await r.json();
+        tumUrunler = res.data || [];
+        document.getElementById("guncelleme").innerText = "Güncelleme: " + (res.metadata?.v || "");
+        
+        // Gam butonları
+        const alan = document.getElementById("gamiFiltre");
+        alan.innerHTML = '<button onclick="filtreleGam(\'\')" class="active">Hepsi</button>';
+        const gamlar = [...new Set(tumUrunler.map(u => u.UrunGami).filter(Boolean))];
+        gamlar.forEach(g => {
+            const btn = document.createElement("button");
+            btn.innerText = g;
+            btn.onclick = () => filtreleGam(g);
+            alan.appendChild(btn);
+        });
+
+        tabloyuCiz();
+    } catch(e) { console.error(e); }
+}
+
+function filtreleGam(g) {
+    document.getElementById("aktifGam").value = g;
+    tabloyuCiz();
+}
+
+function tabloyuCiz() {
+    const arama = document.getElementById("arama").value.toLowerCase();
+    const gam = document.getElementById("aktifGam").value;
+    const tbody = document.querySelector("#urunTablosu tbody");
+    tbody.innerHTML = "";
+
+    tumUrunler.filter(u => {
+        const mGam = !gam || u.UrunGami === gam;
+        const mAra = (u.Kod + " " + (u.TicariKod||"") + " " + (u.Aciklama||"")).toLowerCase().includes(arama);
+        return mGam && mAra;
+    }).forEach(u => {
+        const tr = document.createElement("tr");
+        if(parseInt(u.Stok) <= 0) tr.classList.add("stok-yok");
+        tr.innerHTML = `
+            <td><b>${u.Kod||''}</b></td>
+            <td>${u.TicariKod||''}</td>
+            <td>${u.Stok||0}</td>
+            <td>${para(u.DigerKartlar)}</td>
+            <td>${para(u.T4AMW)}</td>
+            <td>${para(u.TekCekim)}</td>
+            <td class="nakit-vurgu">${para(u.Nakit)}</td>
+            <td>${u.UrunGami||''}</td>
+            <td style="font-size:11px;">${u.Aciklama||''}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function para(v) {
+    if(!v || isNaN(v)) return "-";
+    return Number(v).toLocaleString("tr-TR") + " ₺";
+}
+</script>
 </body>
 </html>
+
