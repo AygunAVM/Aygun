@@ -151,4 +151,6 @@ function filtrele(gam) {
 }
 
 window.onload = () => {
-    if(localStorage.getItem("oturum") === "true")
+    if(localStorage.getItem("oturum") === "true") {
+        document.getElementById('loginArea').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
