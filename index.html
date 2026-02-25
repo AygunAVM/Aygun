@@ -4,184 +4,76 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aygun AVM Fiyat Listesi</title>
-
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#111">
 
 <style>
-body{
-    margin:0;
-    font-family:Arial, sans-serif;
-    background:#f4f4f4;
-}
-
-header{
-    background:#111;
-    color:white;
-    padding:12px;
-    text-align:center;
-    font-size:18px;
-}
-
-.controls{
-    display:flex;
-    gap:8px;
-    padding:10px;
-    background:white;
-    position:sticky;
-    top:0;
-    z-index:10;
-}
-
-#search{
-    flex:1;
-    padding:8px;
-    font-size:14px;
-}
-
-#brandFilter{
-    padding:8px;
-    font-size:14px;
-}
-
-table{
-    width:100%;
-    border-collapse:collapse;
-    background:white;
-}
-
-th, td{
-    padding:8px;
-    border-bottom:1px solid #ddd;
-    font-size:13px;
-}
-
-th{
-    background:#eee;
-}
-
-tr:hover{
-    background:#f1f1f1;
-}
-
-.version{
-    text-align:center;
-    font-size:11px;
-    padding:8px;
-    color:#777;
-}
+body{margin:0;font-family:Arial,sans-serif;background:#f4f4f4}
+header{background:#111;color:white;padding:12px;text-align:center;font-size:18px}
+.controls{display:flex;gap:8px;padding:10px;background:white;position:sticky;top:0;z-index:10}
+#search{flex:1;padding:8px;font-size:14px}
+#brandFilter{padding:8px;font-size:14px}
+table{width:100%;border-collapse:collapse;background:white}
+th,td{padding:8px;border-bottom:1px solid #ddd;font-size:13px}
+th{background:#eee}
+tr:hover{background:#f1f1f1}
+.version{text-align:center;font-size:11px;padding:8px;color:#777}
 </style>
 </head>
 
 <body>
-
 <header>Aygun AVM Fiyat Listesi</header>
-
 <div class="controls">
-    <select id="brandFilter">
-        <option value="">Tüm Markalar</option>
-    </select>
-    <input type="text" id="search" placeholder="Ürün ara...">
+<select id="brandFilter"><option value="">Tüm Markalar</option></select>
+<input type="text" id="search" placeholder="Ürün ara...">
 </div>
 
 <table id="table">
-    <thead>
-        <tr id="thead"></tr>
-    </thead>
-    <tbody id="tbody"></tbody>
+<thead><tr id="thead"></tr></thead>
+<tbody id="tbody"></tbody>
 </table>
 
 <div class="version" id="version"></div>
 
 <script>
-
-let allData = [];
-
+let allData=[];
 async function loadData(){
-
-    const response = await fetch("data/urunler.json?v=" + Date.now());
-    const data = await response.json();
-
-    allData = data;
-
-    buildTable(data);
-    buildBrandFilter(data);
-
-    if(data.length > 0 && data[0].Versiyon){
-        document.getElementById("version").innerText = "Versiyon: " + data[0].Versiyon;
-    }
+const response=await fetch("data/urunler.json?v="+Date.now());
+const data=await response.json();
+allData=data; buildTable(data); buildBrandFilter(data);
+if(data.length>0 && data[0].Versiyon) document.getElementById("version").innerText="Versiyon: "+data[0].Versiyon;
 }
 
 function buildTable(data){
-
-    const thead = document.getElementById("thead");
-    const tbody = document.getElementById("tbody");
-
-    thead.innerHTML = "";
-    tbody.innerHTML = "";
-
-    if(data.length === 0) return;
-
-    Object.keys(data[0]).forEach(key=>{
-        const th = document.createElement("th");
-        th.innerText = key;
-        thead.appendChild(th);
-    });
-
-    data.forEach(row=>{
-        const tr = document.createElement("tr");
-
-        Object.values(row).forEach(value=>{
-            const td = document.createElement("td");
-            td.innerText = value;
-            tr.appendChild(td);
-        });
-
-        tbody.appendChild(tr);
-    });
+const thead=document.getElementById("thead"); const tbody=document.getElementById("tbody");
+thead.innerHTML=""; tbody.innerHTML="";
+if(data.length===0)return;
+Object.keys(data[0]).forEach(key=>{const th=document.createElement("th");th.innerText=key;thead.appendChild(th)});
+data.forEach(row=>{const tr=document.createElement("tr");Object.values(row).forEach(value=>{const td=document.createElement("td");td.innerText=value;tr.appendChild(td)});tbody.appendChild(tr)});
 }
 
 function buildBrandFilter(data){
-
-    const select = document.getElementById("brandFilter");
-    const brands = [...new Set(data.map(item => item.Marka).filter(Boolean))];
-
-    brands.sort();
-
-    brands.forEach(brand=>{
-        const option = document.createElement("option");
-        option.value = brand;
-        option.innerText = brand;
-        select.appendChild(option);
-    });
+const select=document.getElementById("brandFilter");
+const brands=[...new Set(data.map(item=>item.Marka).filter(Boolean))].sort();
+brands.forEach(brand=>{const option=document.createElement("option");option.value=brand;option.innerText=brand;select.appendChild(option)});
 }
 
-document.getElementById("search").addEventListener("input", filterData);
-document.getElementById("brandFilter").addEventListener("change", filterData);
+document.getElementById("search").addEventListener("input",filterData);
+document.getElementById("brandFilter").addEventListener("change",filterData);
 
 function filterData(){
-
-    const text = document.getElementById("search").value.toLowerCase();
-    const brand = document.getElementById("brandFilter").value;
-
-    const filtered = allData.filter(item=>{
-
-        const matchesSearch = Object.values(item).join(" ").toLowerCase().includes(text);
-        const matchesBrand = brand === "" || item.Marka === brand;
-
-        return matchesSearch && matchesBrand;
-    });
-
-    buildTable(filtered);
+const text=document.getElementById("search").value.toLowerCase();
+const brand=document.getElementById("brandFilter").value;
+const filtered=allData.filter(item=>{
+const matchesSearch=Object.values(item).join(" ").toLowerCase().includes(text);
+const matchesBrand=brand===""||item.Marka===brand;
+return matchesSearch && matchesBrand;
+});
+buildTable(filtered);
 }
 
 loadData();
-
-if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('service-worker.js');
-}
-
+if('serviceWorker' in navigator) navigator.serviceWorker.register('service-worker.js');
 </script>
-
 </body>
 </html>
