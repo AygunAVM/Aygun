@@ -3,43 +3,120 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aygün AVM - Fiyat Listesi</title>
+    <title>Aygün AVM</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
-        .container { max-width: 1400px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        #login-area { display: flex; flex-direction: column; max-width: 350px; margin: 100px auto; text-align: center; }
-        #login-area h2 { color: #1e3a8a; margin-bottom: 20px; }
-        #login-area input { margin-bottom: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
-        #login-area button { padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
-        #login-area button:hover { background: #1d4ed8; }
+        body { font-family: sans-serif; background: #f4f7f6; padding: 20px; }
+        .box { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 8px; shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #login-area { max-width: 300px; margin-top: 100px; text-align: center; }
+        input { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background: #007bff; color: white; border: none; cursor: pointer; border-radius: 4px; }
         #table-area { display: none; }
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; }
-        .header-bar h2 { color: #1e3a8a; margin: 0; }
-        .header-bar button { padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; }
-        input[type="text"]#searchInput { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
-        .table-wrapper { overflow-x: auto; background: white; border-radius: 8px; }
-        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-        th { background-color: #2563eb; color: white; padding: 12px; text-align: left; font-size: 13px; text-transform: uppercase; sticky; top: 0; }
-        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #374151; }
-        tr:hover { background-color: #f8fafc; }
-        .version-info { font-size: 12px; color: #6b7280; margin-top: 15px; font-style: italic; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background: #007bff; color: white; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .info { font-size: 11px; color: gray; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container" id="login-area">
-    <h2>Aygün AVM Giriş</h2>
-    <input type="text" id="username" placeholder="Kullanıcı Adı" autocomplete="off">
-    <input type="password" id="password" placeholder="Şifre">
-    <button onclick="login()">Sisteme Giriş Yap</button>
-</div>
-
-<div class="container" id="table-area">
-    <div class="header-bar">
-        <h2 id="welcomeText">Fiyat Listesi</h2>
-        <button onclick="logout()">Güvenli Çıkış</button>
+    <div id="login-area" class="box">
+        <h2>Giriş</h2>
+        <input type="text" id="username" placeholder="Kullanıcı Adı">
+        <input type="password" id="password" placeholder="Şifre">
+        <button type="button" onclick="login()">GİRİŞ YAP</button>
     </div>
-    
-    <input type="text" id="searchInput" placeholder="Ürün kodu, açıklama veya grup içinde ara..." onkeyup="searchTable()">
-    
-    <div class="table
+
+    <div id="table-area" class="box">
+        <div style="display:flex; justify-content:space-between;">
+            <h2>Fiyat Listesi</h2>
+            <button style="width:100px; background:red;" onclick="location.reload()">Çıkış</button>
+        </div>
+        <input type="text" id="search" placeholder="Tabloda ara..." onkeyup="filterTable()">
+        <table id="pTable">
+            <thead>
+                <tr>
+                    <th>Kod</th>
+                    <th>Ticari Kod</th>
+                    <th>Stok</th>
+                    <th>Diğer Kartlar</th>
+                    <th>4T A•M•W</th>
+                    <th>Tek Çekim</th>
+                    <th>Nakit</th>
+                    <th>Ürün Gamı</th>
+                    <th>Açıklama</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <div id="v" class="info"></div>
+    </div>
+
+    <script>
+        let dataRows = [];
+
+        async function login() {
+            const uInput = document.getElementById('username').value.trim();
+            const pInput = document.getElementById('password').value.trim();
+            const ts = new Date().getTime();
+
+            try {
+                // Verileri çek
+                const [uRes, pRes] = await Promise.all([
+                    fetch('https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/kullanicilar.json?t=' + ts),
+                    fetch('https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/urunler.json?t=' + ts)
+                ]);
+
+                const users = await uRes.json();
+                const products = await pRes.json();
+
+                // Kullanıcı kontrolü
+                const found = users.find(u => 
+                    String(u.KullaniciAdi).toLowerCase() === uInput.toLowerCase() && 
+                    String(u.Sifre) === pInput
+                );
+
+                if (found) {
+                    dataRows = products.data || [];
+                    document.getElementById('login-area').style.display = 'none';
+                    document.getElementById('table-area').style.display = 'block';
+                    document.getElementById('v').innerText = "Güncelleme: " + (products.metadata ? products.metadata.v : "");
+                    showTable(dataRows);
+                } else {
+                    alert("Hatalı kullanıcı bilgisi!");
+                }
+            } catch (e) {
+                alert("Bağlantı hatası: " + e.message);
+            }
+        }
+
+        function showTable(list) {
+            const tbody = document.querySelector('#pTable tbody');
+            tbody.innerHTML = '';
+            list.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.Kod || ''}</td>
+                    <td>${item.TicariKod || ''}</td>
+                    <td>${item.Stok || ''}</td>
+                    <td>${item.DigerKartlar || ''}</td>
+                    <td>${item.T4AMW || ''}</td>
+                    <td>${item.TekCekim || ''}</td>
+                    <td>${item.Nakit || ''}</td>
+                    <td>${item.UrunGami || ''}</td>
+                    <td>${item.Açıklama || item.Aciklama || ''}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterTable() {
+            const val = document.getElementById('search').value.toLowerCase();
+            const filtered = dataRows.filter(r => 
+                Object.values(r).some(v => String(v).toLowerCase().includes(val))
+            );
+            showTable(filtered);
+        }
+    </script>
+</body>
+</html>
