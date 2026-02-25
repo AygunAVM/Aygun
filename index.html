@@ -3,146 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fiyat Listesi</title>
+    <title>Aygün AVM - Fiyat Listesi</title>
     <style>
-        body { font-family: sans-serif; background-color: #f4f4f9; margin: 0; padding: 20px; }
-        .container { max-width: 1400px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        #login-area { display: flex; flex-direction: column; max-width: 300px; margin: 50px auto; }
-        #login-area input, #login-area button { margin-bottom: 10px; padding: 10px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        #login-area { display: flex; flex-direction: column; max-width: 350px; margin: 100px auto; text-align: center; }
+        #login-area h2 { color: #1e3a8a; margin-bottom: 20px; }
+        #login-area input { margin-bottom: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
+        #login-area button { padding: 12px; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; }
+        #login-area button:hover { background: #1d4ed8; }
         #table-area { display: none; }
-        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .header-bar h1 { margin: 0; }
-        .header-bar button { padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        input[type="text"] { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 14px; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #3b82f6; color: white; }
-        .version-info { font-size: 12px; color: #666; margin-top: 5px; }
+        .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #e5e7eb; padding-bottom: 15px; }
+        .header-bar h2 { color: #1e3a8a; margin: 0; }
+        .header-bar button { padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; }
+        input[type="text"]#searchInput { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        .table-wrapper { overflow-x: auto; background: white; border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+        th { background-color: #2563eb; color: white; padding: 12px; text-align: left; font-size: 13px; text-transform: uppercase; sticky; top: 0; }
+        td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; color: #374151; }
+        tr:hover { background-color: #f8fafc; }
+        .version-info { font-size: 12px; color: #6b7280; margin-top: 15px; font-style: italic; }
     </style>
 </head>
 <body>
 
 <div class="container" id="login-area">
-    <h2>Giriş Yap</h2>
-    <input type="text" id="username" placeholder="Kullanıcı Adı">
+    <h2>Aygün AVM Giriş</h2>
+    <input type="text" id="username" placeholder="Kullanıcı Adı" autocomplete="off">
     <input type="password" id="password" placeholder="Şifre">
-    <button onclick="login()">Giriş</button>
+    <button onclick="login()">Sisteme Giriş Yap</button>
 </div>
 
 <div class="container" id="table-area">
     <div class="header-bar">
-        <h2>Fiyat Listesi</h2>
-        <button onclick="logout()">Çıkış</button>
+        <h2 id="welcomeText">Fiyat Listesi</h2>
+        <button onclick="logout()">Güvenli Çıkış</button>
     </div>
     
-    <input type="text" id="searchInput" placeholder="Kod, Ticari Kod, Açıklama, Ürün Gamı ara..." onkeyup="searchTable()">
+    <input type="text" id="searchInput" placeholder="Ürün kodu, açıklama veya grup içinde ara..." onkeyup="searchTable()">
     
-    <div style="overflow-x:auto;">
-        <table id="productTable">
-            <thead>
-                <tr>
-                    <th>Kod</th>
-                    <th>Ticari Kod</th>
-                    <th>Stok</th>
-                    <th>Diğer Kartlar</th>
-                    <th>4T A•M•W</th>
-                    <th>Tek Çekim</th>
-                    <th>Nakit</th>
-                    <th>Ürün Gamı</th>
-                    <th>Açıklama</th>
-                </tr>
-            </thead>
-            <tbody>
-                </tbody>
-        </table>
-    </div>
-    <div class="version-info" id="versionText">Versiyon: Yükleniyor...</div>
-</div>
-
-<script>
-    let globalProducts = [];
-
-    async function login() {
-        const username = document.getElementById('username').value;
-        const pass = document.getElementById('password').value;
-
-        try {
-            // Önbellek sorunlarını aşmak için URL sonuna timestamp ekledik
-            const timestamp = new Date().getTime();
-            const [userRes, prodRes] = await Promise.all([
-                fetch('https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/kullanicilar.json?v=' + timestamp),
-                fetch('https://raw.githubusercontent.com/AygunAVM/excel-json/main/data/urunler.json?v=' + timestamp)
-            ]);
-
-            const users = await userRes.json();
-            const productResponse = await prodRes.json();
-            
-            // HATA BURADAYDI: JSON içindeki .data kısmını alıyoruz
-            globalProducts = productResponse.data || [];
-
-            const user = users.find(u => u.KullaniciAdi === username && String(u.Sifre) === pass);
-
-            if (user) {
-                document.getElementById('login-area').style.display = 'none';
-                document.getElementById('table-area').style.display = 'block';
-                
-                if (productResponse.metadata && productResponse.metadata.v) {
-                    document.getElementById('versionText').innerText = "Son Güncelleme: " + productResponse.metadata.v;
-                }
-
-                // Tüm ürünleri tabloya bas
-                renderTable(globalProducts);
-            } else {
-                alert("Hatalı kullanıcı adı veya şifre!");
-            }
-        } catch (error) {
-            console.error("Veri yükleme hatası:", error);
-            alert("Veriler alınamadı. GitHub bağlantınızı kontrol edin.");
-        }
-    }
-
-    function renderTable(products) {
-        const tbody = document.querySelector('#productTable tbody');
-        tbody.innerHTML = ''; 
-
-        products.forEach(p => {
-            const row = `<tr>
-                <td>${p.Kod || ''}</td>
-                <td>${p.TicariKod || ''}</td>
-                <td>${p.Stok || ''}</td>
-                <td>${p.DigerKartlar || ''}</td> 
-                <td>${p.T4AMW || ''}</td>
-                <td>${p.TekCekim || ''}</td>
-                <td>${p.Nakit || ''}</td>
-                <td>${p.UrunGami || ''}</td>
-                <td>${p.Aciklama || ''}</td>
-            </tr>`;
-            tbody.insertAdjacentHTML('beforeend', row);
-        });
-    }
-
-    function searchTable() {
-        const searchText = document.getElementById('searchInput').value.toLowerCase();
-        
-        const filtered = globalProducts.filter(p => {
-            return (
-                (p.Kod && p.Kod.toString().toLowerCase().includes(searchText)) ||
-                (p.TicariKod && p.TicariKod.toString().toLowerCase().includes(searchText)) ||
-                (p.Aciklama && p.Aciklama.toString().toLowerCase().includes(searchText)) ||
-                (p.UrunGami && p.UrunGami.toString().toLowerCase().includes(searchText))
-            );
-        });
-        
-        renderTable(filtered);
-    }
-
-    function logout() {
-        document.getElementById('login-area').style.display = 'block';
-        document.getElementById('table-area').style.display = 'none';
-        document.getElementById('username').value = '';
-        document.getElementById('password').value = '';
-        document.querySelector('#productTable tbody').innerHTML = '';
-    }
-</script>
-</body>
-</html>
+    <div class="table
