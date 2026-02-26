@@ -1,0 +1,9 @@
+{
+  "name": "Aygün AVM",
+  "short_name": "Aygun",
+  "start_url": "/Aygun/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#007bff",
+  "icons": []
+}
