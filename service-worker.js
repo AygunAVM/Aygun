@@ -1,6 +1,5 @@
-const CACHE_NAME = "aygun-v3";
+const CACHE_NAME = "aygun-v4";
 const assets = [
-  "./",
   "./index.html",
   "./manifest.json",
   "./data/urunler.json",
@@ -10,15 +9,9 @@ const assets = [
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(assets);
-    })
-  );
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(assets)));
 });
 
 self.addEventListener("fetch", e => {
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
-  );
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
