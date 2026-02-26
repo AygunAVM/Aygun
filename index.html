@@ -5,21 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aygün AVM | Fiyat Listesi</title>
     <link rel="manifest" href="manifest.json">
-    <link rel="icon" href="icons/icon-192.png"> <style>
-        body { margin: 0; font-family: sans-serif; background: #f4f4f4; }
-        header { background: #111; color: white; padding: 15px; text-align: center; font-weight: bold; }
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f4f4f4; }
+        header { background: #111; color: white; padding: 15px; text-align: center; font-weight: bold; border-bottom: 3px solid #007bff; }
         .controls { padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #ddd; }
         #search { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         #markaFilter { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 10px; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; }
         .logout-btn { background: #d9534f; color: white; }
-        .table-container { overflow-x: auto; background: white; }
+        .table-container { overflow-x: auto; background: white; margin-top: 5px; }
         table { width: 100%; border-collapse: collapse; min-width: 600px; }
-        th, td { padding: 10px; border-bottom: 1px solid #eee; text-align: left; font-size: 13px; }
+        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; font-size: 13px; }
         th { background: #f8f8f8; position: sticky; top: 0; }
         .version { font-size: 11px; color: #888; text-align: center; padding: 20px; }
         
-        /* Giriş Ekranı */
         #loginOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:1000; display:flex; align-items:center; justify-content:center; }
         .login-card { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 280px; text-align: center; }
         .login-card input { padding: 12px; margin-bottom: 10px; width: 100%; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
@@ -55,41 +54,47 @@
 
 <script>
 let allData = [];
-const formatColumns = ["4T AWM", "Tek Çekim", "Nakit"]; 
+const formatCols = ["4T AWM", "Tek Çekim", "Nakit"]; 
 
 function checkAuth() {
-    if (localStorage.getItem("isLoggedIn") !== "true") {
-        document.getElementById("mainContent").style.display = "none";
-        document.getElementById("loginOverlay").style.display = "flex";
-    } else {
+    if (localStorage.getItem("isLoggedIn") === "true") {
         document.getElementById("mainContent").style.display = "block";
         document.getElementById("loginOverlay").style.display = "none";
         loadData();
+    } else {
+        document.getElementById("mainContent").style.display = "none";
+        document.getElementById("loginOverlay").style.display = "flex";
     }
 }
 
 async function checkLogin() {
-    const userVal = document.getElementById("userInput").value;
-    const passVal = document.getElementById("passInput").value;
+    const uInput = document.getElementById("userInput").value.trim();
+    const pInput = document.getElementById("passInput").value.trim();
+    
     try {
         const res = await fetch("data/kullanicilar.json?t=" + Date.now());
         const users = await res.json();
-        const found = users.find(u => u.Kullanici === userVal && u.Sifre.toString() === passVal);
+        
+        // Kullanıcı adı ve şifreyi hem stringe çeviriyoruz hem de boşlukları siliyoruz
+        const found = users.find(u => 
+            String(u.Kullanici).trim() === uInput && 
+            String(u.Sifre).trim() === pInput
+        );
+
         if (found) {
             localStorage.setItem("isLoggedIn", "true");
-            location.reload();
-        } else { alert("Hatalı bilgiler!"); }
-    } catch (e) { alert("Bağlantı hatası!"); }
+            checkAuth();
+        } else {
+            alert("Hatalı Giriş!");
+        }
+    } catch (e) {
+        alert("Bağlantı hatası: Veriler alınamadı.");
+    }
 }
 
 function logout() {
     localStorage.removeItem("isLoggedIn");
     location.reload();
-}
-
-function formatPrice(val) {
-    if (!val || isNaN(val)) return val;
-    return Number(val).toLocaleString('tr-TR');
 }
 
 async function loadData(){
@@ -114,7 +119,8 @@ function buildTable(data){
         const tr = document.createElement("tr");
         keys.forEach(k => {
             const td = document.createElement("td");
-            td.innerText = formatColumns.includes(k) ? formatPrice(row[k]) : row[k];
+            let val = row[k];
+            td.innerText = formatCols.includes(k) && !isNaN(val) ? Number(val).toLocaleString('tr-TR') : val;
             tr.appendChild(td);
         });
         tbody.appendChild(tr);
@@ -145,7 +151,7 @@ function filterTable(){
 }
 
 if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('service-worker.js'); });
+    navigator.serviceWorker.register('service-worker.js');
 }
 checkAuth();
 </script>
