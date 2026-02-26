@@ -6,40 +6,47 @@
 <title>Aygün AVM | Fiyat Listesi</title>
 <link rel="manifest" href="manifest.json">
 <style>
-body {font-family:sans-serif; margin:10px; background:#f8f9fa;}
-.card {background:#fff; padding:20px; border-radius:10px; max-width:1200px; margin:auto;}
-input {padding:8px; margin:5px 0; width:100%; box-sizing:border-box;}
-button {padding:8px; margin:2px; cursor:pointer;}
-table {border-collapse:collapse; width:100%; font-size:13px;}
-th,td {border:1px solid #ddd; padding:6px;}
-th {background:#007bff; color:white; position:sticky; top:0;}
-.stok-yok {background:#fff5f5; color:red;}
-.nakit-vurgu {color:green; font-weight:bold;}
-.filter-buttons {display:flex; flex-wrap:wrap; gap:5px; margin-bottom:5px;}
-.filter-buttons button.active {background:#343a40; color:white;}
+:root { --primary:#007bff; --dark:#343a40; --success:#28a745; --danger:#dc3545;}
+body {font-family:Segoe UI, Arial, sans-serif;background:#f8f9fa;margin:0;padding:15px;}
+.card {background:#fff;padding:25px;border-radius:12px;box-shadow:0 4px 15px rgba(0,0,0,0.1);max-width:1400px;margin:auto;}
+#loginArea {max-width:380px;text-align:center;margin-top:80px;}
+input{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:8px;box-sizing:border-box;}
+button{width:100%;padding:12px;background:var(--primary);color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;}
+.hidden{display:none;}
+.table-container{overflow-x:auto;margin-top:15px;}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:1000px;}
+th{background:var(--primary);color:white;padding:12px;text-align:left;position:sticky;top:0;}
+td{padding:10px;border-bottom:1px solid #eee;}
+.stok-yok{background:#fff5f5 !important;color:var(--danger);}
+.nakit-vurgu{color:var(--success);font-weight:bold;}
+.filter-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px;}
+.filter-buttons button{width:auto;padding:6px 12px;background:#6c757d;font-size:12px;}
+.filter-buttons button.active{background:var(--dark);}
 </style>
 </head>
 <body>
 
 <div id="loginArea" class="card">
-<h2>Giriş</h2>
-<input type="text" id="email" placeholder="E-posta/Kullanıcı">
+<h2>Aygün AVM Giriş</h2>
+<input type="text" id="email" placeholder="E-posta / Kullanıcı Adı">
 <input type="password" id="sifre" placeholder="Şifre">
 <button onclick="girisYap()">Giriş Yap</button>
 </div>
 
-<div id="app" class="card" style="display:none;">
-<div style="display:flex; justify-content:space-between;">
+<div id="app" class="card hidden">
+<div style="display:flex;justify-content:space-between;align-items:center;">
 <h3>Fiyat Listesi <span id="versiyon"></span></h3>
 <div>
-<button onclick="cikisYap()">Çıkış</button>
+<button onclick="cikisYap()" style="background:var(--danger);margin-right:5px;">Çıkış</button>
+<button onclick="sifreDegistir()">Şifre Değiştir</button>
 </div>
 </div>
 
-<input type="text" id="arama" placeholder="Ara..." onkeyup="tabloyuCiz()">
+<input type="text" id="arama" placeholder="Hızlı ara..." onkeyup="tabloyuCiz()">
 <div id="markaFiltre" class="filter-buttons"></div>
+<input type="hidden" id="aktifMarka" value="">
 
-<div style="overflow-x:auto;">
+<div class="table-container">
 <table id="urunTablosu">
 <thead>
 <tr>
@@ -57,91 +64,88 @@ th {background:#007bff; color:white; position:sticky; top:0;}
 <tbody></tbody>
 </table>
 </div>
-
 </div>
 
 <script>
 let tumUrunler = [];
+let versiyon = "";
 
-window.onload = function() {
-    if(localStorage.getItem("aygun_auth") === "true") appiAc();
+window.onload = function(){
+if(localStorage.getItem("aygun_auth")==="true") appiAc();
 };
 
-async function girisYap() {
-    const mail = document.getElementById("email").value.trim().toLowerCase();
-    const pass = document.getElementById("sifre").value.trim();
-    if(!mail || !pass) { alert("Alanları doldurun"); return; }
-    try {
-        const res = await fetch('data/kullanicilar.json?v=' + Date.now());
-        const users = await res.json();
-        const user = users.find(u => u.Email.toLowerCase()===mail && u.Sifre===pass);
-        if(user) {
-            localStorage.setItem("aygun_auth","true");
-            appiAc();
-        } else alert("Hatalı giriş!");
-    } catch(e){ alert("Kullanıcı verisine ulaşılamıyor."); }
+async function girisYap(){
+const mail = document.getElementById("email").value.trim().toLowerCase();
+const pass = document.getElementById("sifre").value.trim();
+if(!mail||!pass){alert("Alanları doldurun");return;}
+try{
+const r = await fetch('data/kullanicilar.json?v='+Date.now());
+const users = await r.json();
+const user = users.find(u=>String(u.Email).toLowerCase()===mail && String(u.Sifre)===pass);
+if(user){localStorage.setItem("aygun_auth","true");appiAc();}
+else{alert("Hatalı Giriş!");}
+}catch(e){alert("Kullanıcı verisine ulaşılamıyor. Excel'den JSONGuncelle çalıştırın.");}
 }
 
 function appiAc(){
-    document.getElementById("loginArea").style.display="none";
-    document.getElementById("app").style.display="block";
-    veriyiGetir();
+document.getElementById("loginArea").classList.add("hidden");
+document.getElementById("app").classList.remove("hidden");
+veriyiGetir();
 }
 
-function cikisYap(){
-    localStorage.removeItem("aygun_auth");
-    location.reload();
-}
+function cikisYap(){localStorage.removeItem("aygun_auth");location.reload();}
+function sifreDegistir(){alert("Şifre değiştir işlemi aktif değil.");}
 
 async function veriyiGetir(){
-    try{
-        const r = await fetch('data/urunler.json?v='+Date.now());
-        const res = await r.json();
-        tumUrunler = res.data||[];
-        document.getElementById("versiyon").innerText = res.metadata?.v||"";
-        
-        const alan = document.getElementById("markaFiltre");
-        alan.innerHTML = '<button class="active" onclick="filtreleMarka(\'\')">Hepsi</button>';
-        const markaSet = [...new Set(tumUrunler.map(u=>u.Marka).filter(Boolean))];
-        markaSet.forEach(m=>{
-            const btn = document.createElement("button"); btn.innerText=m; btn.onclick=()=>filtreleMarka(m); alan.appendChild(btn);
-        });
+try{
+const r = await fetch('data/urunler.json?v='+Date.now());
+const res = await r.json();
+tumUrunler = res.data||[];
+versiyon = res.metadata?.v||"";
+document.getElementById("versiyon").innerText = versiyon;
 
-        tabloyuCiz();
-    } catch(e){ console.error(e); }
+// Marka butonları
+const alan = document.getElementById("markaFiltre");
+alan.innerHTML='<button onclick="filtreleMarka(\'\')" class="active">Hepsi</button>';
+const markalar = [...new Set(tumUrunler.map(u=>u.Marka||u.UrunGami))];
+markalar.forEach(m=>{
+const btn=document.createElement("button"); btn.innerText=m; btn.onclick=()=>filtreleMarka(m); alan.appendChild(btn);
+});
+
+tabloyuCiz();
+}catch(e){console.error(e);}
 }
 
 function filtreleMarka(m){
-    document.getElementById("aktifMarka")?.remove();
-    const inp = document.createElement("input"); inp.type="hidden"; inp.id="aktifMarka"; inp.value=m; document.body.appendChild(inp);
-    tabloyuCiz();
+document.getElementById("aktifMarka").value=m;
+tabloyuCiz();
 }
 
 function tabloyuCiz(){
-    const arama = document.getElementById("arama").value.toLowerCase();
-    const marka = document.getElementById("aktifMarka")?.value||"";
-    const tbody = document.querySelector("#urunTablosu tbody");
-    tbody.innerHTML="";
-    
-    tumUrunler.filter(u=>{
-        const mMarka = !marka || u.Marka===marka;
-        const mAra = (u.Kod+" "+(u.TicariKod||"")+" "+(u.Aciklama||"")).toLowerCase().includes(arama);
-        return mMarka && mAra;
-    }).forEach(u=>{
-        const tr=document.createElement("tr");
-        if(Number(u.Stok)<=0) tr.classList.add("stok-yok");
-        tr.innerHTML=`
-        <td>${u.Kod||''}</td>
-        <td>${u.TicariKod||''}</td>
-        <td>${u.Stok||0}</td>
-        <td>${u.DigerKartlar||''}</td>
-        <td>${u.T4AMW||''}</td>
-        <td>${u.TekCekim||''}</td>
-        <td class="nakit-vurgu">${u.Nakit||''}</td>
-        <td>${u.Marka||''}</td>
-        <td>${u.Aciklama||''}</td>`;
-        tbody.appendChild(tr);
-    });
+const arama=document.getElementById("arama").value.toLowerCase();
+const marka=document.getElementById("aktifMarka").value;
+const tbody=document.querySelector("#urunTablosu tbody");
+tbody.innerHTML="";
+tumUrunler.filter(u=>{
+const mAra=(u.Kod+" "+(u.TicariKod||"")+" "+(u.Aciklama||"")).toLowerCase().includes(arama);
+const mMarka=!marka||u.Marka===marka||u.UrunGami===marka;
+return mAra && mMarka;
+}).forEach(u=>{
+const tr=document.createElement("tr");
+if(parseInt(u.Stok)<=0) tr.classList.add("stok-yok");
+tr.innerHTML=`
+<td><b>${u.Kod||''}</b></td>
+<td>${u.TicariKod||''}</td>
+<td>${u.Stok||0}</td>
+<td>${u.DigerKartlar||''}</td>
+<td>${u.T4AMW||''}</td>
+<td>${u.TekCekim||''}</td>
+<td class="nakit-vurgu">${u.Nakit||''}</td>
+<td>${u.Marka||u.UrunGami||''}</td>
+<td style="font-size:11px;">${u.Aciklama||''}</td>
+`;
+tbody.appendChild(tr);
+});
 }
 </script>
 </body>
