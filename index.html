@@ -20,7 +20,6 @@ th {background:#007bff; color:white; position:sticky; top:0;}
 </style>
 </head>
 <body>
-
 <div id="loginArea" class="card">
 <h2>Giriş</h2>
 <input type="text" id="email" placeholder="E-posta/Kullanıcı">
@@ -31,27 +30,17 @@ th {background:#007bff; color:white; position:sticky; top:0;}
 <div id="app" class="card" style="display:none;">
 <div style="display:flex; justify-content:space-between;">
 <h3>Fiyat Listesi <span id="versiyon"></span></h3>
-<div>
-<button onclick="cikisYap()">Çıkış</button>
-</div>
+<div><button onclick="cikisYap()">Çıkış</button></div>
 </div>
 
 <input type="text" id="arama" placeholder="Ara..." onkeyup="tabloyuCiz()">
 <div id="markaFiltre" class="filter-buttons"></div>
-
 <div style="overflow-x:auto;">
 <table id="urunTablosu">
 <thead>
 <tr>
-<th>Kod</th>
-<th>Ticari Kod</th>
-<th>Stok</th>
-<th>Diğer Kartlar</th>
-<th>4T</th>
-<th>Tek Çekim</th>
-<th>Nakit</th>
-<th>Marka</th>
-<th>Açıklama</th>
+<th>Kod</th><th>Ticari Kod</th><th>Stok</th><th>Diğer Kartlar</th>
+<th>4T</th><th>Tek Çekim</th><th>Nakit</th><th>Marka</th><th>Açıklama</th>
 </tr>
 </thead>
 <tbody></tbody>
@@ -61,84 +50,67 @@ th {background:#007bff; color:white; position:sticky; top:0;}
 
 <script>
 let tumUrunler = [];
+window.onload = function(){ if(localStorage.getItem("aygun_auth")==="true") appiAc();};
 
-window.onload = function() {
-    if(localStorage.getItem("aygun_auth") === "true") appiAc();
-};
-
-async function girisYap() {
-    const mail = document.getElementById("email").value.trim().toLowerCase();
-    const pass = document.getElementById("sifre").value.trim();
-    if(!mail || !pass) { alert("Alanları doldurun"); return; }
-    try {
-        const res = await fetch('data/kullanicilar.json?v=' + Date.now());
-        const users = await res.json();
-        const user = users.find(u => u.Email.toLowerCase()===mail && u.Sifre===pass);
-        if(user) { localStorage.setItem("aygun_auth","true"); appiAc(); } 
-        else alert("Hatalı giriş!");
-    } catch(e){ alert("Kullanıcı verisine ulaşılamıyor."); console.error(e);}
+async function girisYap(){
+const mail=document.getElementById("email").value.trim().toLowerCase();
+const pass=document.getElementById("sifre").value.trim();
+if(!mail||!pass){ alert("Alanları doldurun"); return;}
+try{
+const res=await fetch('data/kullanicilar.json?v='+Date.now());
+const users=await res.json();
+const user=users.find(u=>u.Email.toLowerCase()===mail && u.Sifre===pass);
+if(user){ localStorage.setItem("aygun_auth","true"); appiAc(); } else alert("Hatalı giriş!");
+}catch(e){ alert("Kullanıcı verisine ulaşılamıyor"); console.error(e);}
 }
 
 function appiAc(){
-    document.getElementById("loginArea").style.display="none";
-    document.getElementById("app").style.display="block";
-    veriyiGetir();
+document.getElementById("loginArea").style.display="none";
+document.getElementById("app").style.display="block";
+veriyiGetir();
 }
 
-function cikisYap(){
-    localStorage.removeItem("aygun_auth");
-    location.reload();
-}
+function cikisYap(){ localStorage.removeItem("aygun_auth"); location.reload(); }
 
 async function veriyiGetir(){
-    try{
-        const r = await fetch('data/urunler.json?v='+Date.now());
-        const res = await r.json();
-        tumUrunler = res.data||[];
-        document.getElementById("versiyon").innerText = res.metadata?.v||"";
-        
-        const alan = document.getElementById("markaFiltre");
-        alan.innerHTML = '<button class="active" onclick="filtreleMarka(\'\')">Hepsi</button>';
-        const markaSet = [...new Set(tumUrunler.map(u=>u.Marka).filter(Boolean))];
-        markaSet.forEach(m=>{
-            const btn = document.createElement("button"); btn.innerText=m; btn.onclick=()=>filtreleMarka(m); alan.appendChild(btn);
-        });
+try{
+const r=await fetch('data/urunler.json?v='+Date.now());
+const res=await r.json();
+tumUrunler=res.data||[];
+document.getElementById("versiyon").innerText=res.metadata?.v||"";
 
-        tabloyuCiz();
-    } catch(e){ console.error(e); alert("Ürün verisine ulaşılamıyor");}
+const alan=document.getElementById("markaFiltre");
+alan.innerHTML='<button class="active" onclick="filtreleMarka(\'\')">Hepsi</button>';
+[...new Set(tumUrunler.map(u=>u.Marka).filter(Boolean))].forEach(m=>{
+const btn=document.createElement("button"); btn.innerText=m; btn.onclick=()=>filtreleMarka(m); alan.appendChild(btn);
+});
+tabloyuCiz();
+}catch(e){ console.error(e); alert("Ürün verisine ulaşılamıyor"); }
 }
 
 function filtreleMarka(m){
-    document.getElementById("aktifMarka")?.remove();
-    const inp = document.createElement("input"); inp.type="hidden"; inp.id="aktifMarka"; inp.value=m; document.body.appendChild(inp);
-    tabloyuCiz();
+document.getElementById("aktifMarka")?.remove();
+const inp=document.createElement("input"); inp.type="hidden"; inp.id="aktifMarka"; inp.value=m; document.body.appendChild(inp);
+tabloyuCiz();
 }
 
 function tabloyuCiz(){
-    const arama = document.getElementById("arama").value.toLowerCase();
-    const marka = document.getElementById("aktifMarka")?.value||"";
-    const tbody = document.querySelector("#urunTablosu tbody");
-    tbody.innerHTML="";
-    
-    tumUrunler.filter(u=>{
-        const mMarka = !marka || u.Marka===marka;
-        const mAra = (u.Kod+" "+(u.TicariKod||"")+" "+(u.Aciklama||"")).toLowerCase().includes(arama);
-        return mMarka && mAra;
-    }).forEach(u=>{
-        const tr=document.createElement("tr");
-        if(Number(u.Stok)<=0) tr.classList.add("stok-yok");
-        tr.innerHTML=`
-        <td>${u.Kod||''}</td>
-        <td>${u.TicariKod||''}</td>
-        <td>${u.Stok||0}</td>
-        <td>${u.DigerKartlar||''}</td>
-        <td>${u.T4AMW||''}</td>
-        <td>${u.TekCekim||''}</td>
-        <td class="nakit-vurgu">${u.Nakit||''}</td>
-        <td>${u.Marka||''}</td>
-        <td>${u.Aciklama||''}</td>`;
-        tbody.appendChild(tr);
-    });
+const arama=document.getElementById("arama").value.toLowerCase();
+const marka=document.getElementById("aktifMarka")?.value||"";
+const tbody=document.querySelector("#urunTablosu tbody");
+tbody.innerHTML="";
+tumUrunler.filter(u=>{
+const mMarka=!marka||u.Marka===marka;
+const mAra=(u.Kod+" "+(u.TicariKod||"")+" "+(u.Aciklama||"")).toLowerCase().includes(arama);
+return mMarka && mAra;
+}).forEach(u=>{
+const tr=document.createElement("tr");
+if(Number(u.Stok)<=0) tr.classList.add("stok-yok");
+tr.innerHTML=`<td>${u.Kod||''}</td><td>${u.TicariKod||''}</td><td>${u.Stok||0}</td>
+<td>${u.DigerKartlar||''}</td><td>${u.T4AMW||''}</td><td>${u.TekCekim||''}</td>
+<td class="nakit-vurgu">${u.Nakit||''}</td><td>${u.Marka||''}</td><td>${u.Aciklama||''}</td>`;
+tbody.appendChild(tr);
+});
 }
 </script>
 </body>
