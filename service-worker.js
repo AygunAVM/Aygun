@@ -1,13 +1,20 @@
 const CACHE_NAME = "aygun-cache-v1";
 const urlsToCache = [
-  "/Aygun/",
-  "/Aygun/index.html",
-  "/Aygun/data/urunler.json",
-  "/Aygun/data/kullanicilar.json"
+  "./",
+  "./index.html",
+  "./data/urunler.json",
+  "./data/kullanicilar.json",
+  "./manifest.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache)));
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(urlsToCache);
+    })
+  );
 });
 
 self.addEventListener("fetch", e => {
