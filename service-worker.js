@@ -1,12 +1,20 @@
-const CACHE_NAME = "aygun-v2";
+const CACHE_NAME = "aygun-v3";
 const assets = [
   "./",
   "./index.html",
-  "./manifest.json"
+  "./manifest.json",
+  "./data/urunler.json",
+  "./data/kullanicilar.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png"
 ];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(assets)));
+  e.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(assets);
+    })
+  );
 });
 
 self.addEventListener("fetch", e => {
