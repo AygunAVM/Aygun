@@ -1,4 +1,4 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
@@ -57,7 +57,6 @@ th {background:#007bff; color:white; position:sticky; top:0;}
 <tbody></tbody>
 </table>
 </div>
-
 </div>
 
 <script>
@@ -75,11 +74,9 @@ async function girisYap() {
         const res = await fetch('data/kullanicilar.json?v=' + Date.now());
         const users = await res.json();
         const user = users.find(u => u.Email.toLowerCase()===mail && u.Sifre===pass);
-        if(user) {
-            localStorage.setItem("aygun_auth","true");
-            appiAc();
-        } else alert("Hatalı giriş!");
-    } catch(e){ alert("Kullanıcı verisine ulaşılamıyor."); }
+        if(user) { localStorage.setItem("aygun_auth","true"); appiAc(); } 
+        else alert("Hatalı giriş!");
+    } catch(e){ alert("Kullanıcı verisine ulaşılamıyor."); console.error(e);}
 }
 
 function appiAc(){
@@ -108,7 +105,7 @@ async function veriyiGetir(){
         });
 
         tabloyuCiz();
-    } catch(e){ console.error(e); }
+    } catch(e){ console.error(e); alert("Ürün verisine ulaşılamıyor");}
 }
 
 function filtreleMarka(m){
