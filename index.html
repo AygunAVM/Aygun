@@ -6,39 +6,47 @@
     <title>Aygün AVM | Fiyat Listesi</title>
     <link rel="manifest" href="manifest.json">
     <style>
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f4; }
-        header { background: #111; color: white; padding: 15px; text-align: center; font-weight: bold; }
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f4; color: #333; }
+        header { background: #111; color: white; padding: 15px; text-align: center; font-weight: bold; border-bottom: 3px solid #007bff; }
         .controls { padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #ddd; }
         #search { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
         #markaFilter { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 15px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        .table-container { overflow-x: auto; background: white; }
+        button.logout-btn { padding: 10px 15px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        
+        /* Tablo Tasarımı */
+        .table-container { overflow-x: auto; background: white; margin: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         table { width: 100%; border-collapse: collapse; min-width: 600px; }
         th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
-        th { background: #f8f8f8; position: sticky; top: 0; }
+        th { background: #f8f8f8; color: #555; position: sticky; top: 0; }
         tr:nth-child(even) { background: #fafafa; }
         .version { font-size: 11px; color: #888; text-align: center; padding: 20px; }
         
-        /* Login Overlay */
-        #loginOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        #loginOverlay input { padding:12px; margin:10px; width:250px; border:1px solid #ccc; border-radius:4px; text-align:center; }
-        #loginOverlay button { background:#007bff; width:275px; }
+        /* Login Ekranı Tasarımı */
+        #loginOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .login-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 320px; text-align: center; }
+        .login-card h2 { margin-bottom: 20px; color: #111; }
+        .login-card input { padding: 12px; margin-bottom: 15px; width: 100%; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+        .login-card button { background:#007bff; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; }
+        .login-card button:hover { background: #0056b3; }
     </style>
 </head>
 <body>
 
 <div id="loginOverlay" style="display:none;">
-    <h2>Aygün AVM Giriş</h2>
-    <input type="password" id="passInput" placeholder="Sistem Şifresi">
-    <button onclick="checkLogin()">Giriş Yap</button>
+    <div class="login-card">
+        <h2>Aygün AVM Giriş</h2>
+        <input type="text" id="userInput" placeholder="Kullanıcı Adı veya E-posta">
+        <input type="password" id="passInput" placeholder="Şifre">
+        <button onclick="checkLogin()">Sisteme Giriş Yap</button>
+    </div>
 </div>
 
-<div id="mainContent">
+<div id="mainContent" style="display:none;">
     <header>Aygün AVM Fiyat Listesi</header>
     <div class="controls">
         <select id="markaFilter"><option value="">Tüm Markalar</option></select>
-        <input type="text" id="search" placeholder="Ürün veya model ara...">
-        <button onclick="logout()">Güvenli Çıkış</button>
+        <input type="text" id="search" placeholder="Ürün, marka veya model ara...">
+        <button class="logout-btn" onclick="logout()">Güvenli Çıkış</button>
     </div>
     <div class="table-container">
         <table>
@@ -51,9 +59,10 @@
 
 <script>
 let allData = [];
-const formatColumns = ["4T AWM", "Tek Çekim", "Nakit"]; // Nokta eklenecek sütunlar
+// Nokta eklenecek sütun isimleri (Excel tablonuzla aynı olmalı)
+const formatColumns = ["4T AWM", "Tek Çekim", "Nakit"]; 
 
-// Güvenlik: Giriş Kontrolü
+// 1. Yetki Kontrolü
 function checkAuth() {
     if (localStorage.getItem("isLoggedIn") !== "true") {
         document.getElementById("mainContent").style.display = "none";
@@ -65,43 +74,63 @@ function checkAuth() {
     }
 }
 
+// 2. Giriş Doğrulama (Kullanıcı Adı + Şifre)
 async function checkLogin() {
-    const pass = document.getElementById("passInput").value;
+    const userVal = document.getElementById("userInput").value.trim();
+    const passVal = document.getElementById("passInput").value.trim();
+
+    if(!userVal || !passVal) {
+        alert("Lütfen tüm alanları doldurun.");
+        return;
+    }
+
     try {
         const res = await fetch("data/kullanicilar.json?t=" + Date.now());
         const users = await res.json();
-        const user = users.find(u => u.Sifre.toString() === pass);
-        if (user) {
+        
+        // JSON'da "Kullanici" (veya E-posta) ve "Sifre" sütunlarını arar
+        const foundUser = users.find(u => 
+            (u.Kullanici === userVal || u.Email === userVal) && 
+            u.Sifre.toString() === passVal
+        );
+
+        if (foundUser) {
             localStorage.setItem("isLoggedIn", "true");
             location.reload();
         } else {
-            alert("Hatalı Şifre!");
+            alert("Kullanıcı adı veya şifre hatalı!");
         }
-    } catch (e) { alert("Sistem hatası: Kullanıcı listesi alınamadı."); }
+    } catch (e) { 
+        alert("Sistem hatası: Veritabanına erişilemedi."); 
+        console.error(e);
+    }
 }
 
+// 3. Çıkış İşlemi
 function logout() {
     localStorage.removeItem("isLoggedIn");
     location.reload();
 }
 
-// Binlik Ayırıcı Fonksiyonu (1249 -> 1.249)
+// 4. Sayı Formatlama (1249 -> 1.249)
 function formatPrice(val) {
-    if (!val || isNaN(val)) return val;
+    if (val === "" || val === null || isNaN(val)) return val;
     return Number(val).toLocaleString('tr-TR');
 }
 
+// 5. Veri Yükleme
 async function loadData(){
     try {
         const res = await fetch("data/urunler.json?v=" + Date.now());
         const json = await res.json();
         allData = json.data || [];
-        document.getElementById("version").innerText = "Güncelleme: " + (json.metadata?.v || "");
+        document.getElementById("version").innerText = "Sistem Güncelleme: " + (json.metadata?.v || "v0");
         buildTable(allData);
         buildFilter(allData);
     } catch(e) { console.error("Veri yükleme hatası:", e); }
 }
 
+// 6. Tablo Oluşturma
 function buildTable(data){
     const thead = document.getElementById("thead");
     const tbody = document.getElementById("tbody");
@@ -120,7 +149,6 @@ function buildTable(data){
         keys.forEach(key => {
             const td = document.createElement("td");
             let val = row[key];
-            // Belirtilen sütunlarda rakam varsa formatla
             if (formatColumns.includes(key)) {
                 td.innerText = formatPrice(val);
             } else {
@@ -132,6 +160,7 @@ function buildTable(data){
     });
 }
 
+// 7. Filtreleme ve Arama
 function buildFilter(data){
     const sel = document.getElementById("markaFilter");
     const brands = [...new Set(data.map(u=>u.Marka))].filter(x=>x).sort();
@@ -155,10 +184,10 @@ function filterTable(){
     buildTable(filtered);
 }
 
-// PWA Servis Kaydı
+// 8. PWA Kaydı
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js');
+        navigator.serviceWorker.register('./service-worker.js').catch(err => console.log("SW hatası:", err));
     });
 }
 
