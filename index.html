@@ -1,197 +1,122 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aygün AVM | Fiyat Listesi</title>
-    <link rel="manifest" href="manifest.json">
-    <style>
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f4f4; color: #333; }
-        header { background: #111; color: white; padding: 15px; text-align: center; font-weight: bold; border-bottom: 3px solid #007bff; }
-        .controls { padding: 10px; display: flex; gap: 8px; flex-wrap: wrap; background: #fff; border-bottom: 1px solid #ddd; }
-        #search { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        #markaFilter { padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button.logout-btn { padding: 10px 15px; background: #d9534f; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        
-        /* Tablo Tasarımı */
-        .table-container { overflow-x: auto; background: white; margin: 10px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        table { width: 100%; border-collapse: collapse; min-width: 600px; }
-        th, td { padding: 12px; border-bottom: 1px solid #eee; text-align: left; font-size: 14px; }
-        th { background: #f8f8f8; color: #555; position: sticky; top: 0; }
-        tr:nth-child(even) { background: #fafafa; }
-        .version { font-size: 11px; color: #888; text-align: center; padding: 20px; }
-        
-        /* Login Ekranı Tasarımı */
-        #loginOverlay { position: fixed; top:0; left:0; width:100%; height:100%; background:#f0f2f5; z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .login-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 320px; text-align: center; }
-        .login-card h2 { margin-bottom: 20px; color: #111; }
-        .login-card input { padding: 12px; margin-bottom: 15px; width: 100%; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
-        .login-card button { background:#007bff; color: white; width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.3s; }
-        .login-card button:hover { background: #0056b3; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Aygün AVM Fiyat Listesi</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#007bff">
+
+<style>
+body{
+    font-family: Arial, sans-serif;
+    margin:0;
+    padding:0;
+}
+
+.header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:15px;
+    background:#f5f5f5;
+    border-bottom:1px solid #ddd;
+}
+
+#versiyon{
+    font-weight:bold;
+    color:#007bff;
+}
+
+h3{
+    margin:0;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+}
+
+th, td{
+    padding:8px;
+    border:1px solid #ddd;
+    text-align:left;
+    font-size:14px;
+}
+
+th{
+    background:#f0f0f0;
+}
+</style>
 </head>
 <body>
 
-<div id="loginOverlay" style="display:none;">
-    <div class="login-card">
-        <h2>Aygün AVM Giriş</h2>
-        <input type="text" id="userInput" placeholder="Kullanıcı Adı veya E-posta">
-        <input type="password" id="passInput" placeholder="Şifre">
-        <button onclick="checkLogin()">Sisteme Giriş Yap</button>
-    </div>
+<div class="header">
+    <span id="versiyon">Yükleniyor...</span>
+    <h3>Aygün AVM Fiyat Listesi</h3>
 </div>
 
-<div id="mainContent" style="display:none;">
-    <header>Aygün AVM Fiyat Listesi</header>
-    <div class="controls">
-        <select id="markaFilter"><option value="">Tüm Markalar</option></select>
-        <input type="text" id="search" placeholder="Ürün, marka veya model ara...">
-        <button class="logout-btn" onclick="logout()">Güvenli Çıkış</button>
-    </div>
-    <div class="table-container">
-        <table>
-            <thead><tr id="thead"></tr></thead>
-            <tbody id="tbody"></tbody>
-        </table>
-    </div>
-    <div class="version" id="version"></div>
+<div style="padding:15px;">
+    <table id="urunTable">
+        <thead></thead>
+        <tbody></tbody>
+    </table>
 </div>
 
 <script>
-let allData = [];
-// Nokta eklenecek sütun isimleri (Excel tablonuzla aynı olmalı)
-const formatColumns = ["4T AWM", "Tek Çekim", "Nakit"]; 
+const JSON_URL = "data/urunler.json?v=" + Date.now();
 
-// 1. Yetki Kontrolü
-function checkAuth() {
-    if (localStorage.getItem("isLoggedIn") !== "true") {
-        document.getElementById("mainContent").style.display = "none";
-        document.getElementById("loginOverlay").style.display = "flex";
-    } else {
-        document.getElementById("mainContent").style.display = "block";
-        document.getElementById("loginOverlay").style.display = "none";
-        loadData();
-    }
-}
+fetch(JSON_URL)
+.then(res => res.json())
+.then(data => {
 
-// 2. Giriş Doğrulama (Kullanıcı Adı + Şifre)
-async function checkLogin() {
-    const userVal = document.getElementById("userInput").value.trim();
-    const passVal = document.getElementById("passInput").value.trim();
-
-    if(!userVal || !passVal) {
-        alert("Lütfen tüm alanları doldurun.");
-        return;
+    // Versiyon Yaz
+    if(data.metadata && data.metadata.v){
+        document.getElementById("versiyon").innerText = data.metadata.v;
     }
 
-    try {
-        const res = await fetch("data/kullanicilar.json?t=" + Date.now());
-        const users = await res.json();
-        
-        // JSON'da "Kullanici" (veya E-posta) ve "Sifre" sütunlarını arar
-        const foundUser = users.find(u => 
-            (u.Kullanici === userVal || u.Email === userVal) && 
-            u.Sifre.toString() === passVal
-        );
+    // Tablo Oluştur
+    const table = document.getElementById("urunTable");
+    const thead = table.querySelector("thead");
+    const tbody = table.querySelector("tbody");
 
-        if (foundUser) {
-            localStorage.setItem("isLoggedIn", "true");
-            location.reload();
-        } else {
-            alert("Kullanıcı adı veya şifre hatalı!");
-        }
-    } catch (e) { 
-        alert("Sistem hatası: Veritabanına erişilemedi."); 
-        console.error(e);
-    }
-}
+    if(data.data && data.data.length > 0){
 
-// 3. Çıkış İşlemi
-function logout() {
-    localStorage.removeItem("isLoggedIn");
-    location.reload();
-}
-
-// 4. Sayı Formatlama (1249 -> 1.249)
-function formatPrice(val) {
-    if (val === "" || val === null || isNaN(val)) return val;
-    return Number(val).toLocaleString('tr-TR');
-}
-
-// 5. Veri Yükleme
-async function loadData(){
-    try {
-        const res = await fetch("data/urunler.json?v=" + Date.now());
-        const json = await res.json();
-        allData = json.data || [];
-        document.getElementById("version").innerText = "Sistem Güncelleme: " + (json.metadata?.v || "v0");
-        buildTable(allData);
-        buildFilter(allData);
-    } catch(e) { console.error("Veri yükleme hatası:", e); }
-}
-
-// 6. Tablo Oluşturma
-function buildTable(data){
-    const thead = document.getElementById("thead");
-    const tbody = document.getElementById("tbody");
-    thead.innerHTML = ""; tbody.innerHTML = "";
-    if(!data.length) return;
-
-    const keys = Object.keys(data[0]);
-    keys.forEach(key => {
-        const th = document.createElement("th");
-        th.innerText = key;
-        thead.appendChild(th);
-    });
-
-    data.forEach(row => {
-        const tr = document.createElement("tr");
-        keys.forEach(key => {
-            const td = document.createElement("td");
-            let val = row[key];
-            if (formatColumns.includes(key)) {
-                td.innerText = formatPrice(val);
-            } else {
-                td.innerText = val;
-            }
-            tr.appendChild(td);
+        // Header
+        const headers = Object.keys(data.data[0]);
+        let headerRow = "<tr>";
+        headers.forEach(h => {
+            headerRow += "<th>" + h + "</th>";
         });
-        tbody.appendChild(tr);
-    });
-}
+        headerRow += "</tr>";
+        thead.innerHTML = headerRow;
 
-// 7. Filtreleme ve Arama
-function buildFilter(data){
-    const sel = document.getElementById("markaFilter");
-    const brands = [...new Set(data.map(u=>u.Marka))].filter(x=>x).sort();
-    brands.forEach(b => {
-        const opt = document.createElement("option");
-        opt.value = b; opt.textContent = b;
-        sel.appendChild(opt);
-    });
-    sel.onchange = filterTable;
-    document.getElementById("search").oninput = filterTable;
-}
+        // Body
+        let rows = "";
+        data.data.forEach(item => {
+            rows += "<tr>";
+            headers.forEach(h => {
+                rows += "<td>" + (item[h] ?? "") + "</td>";
+            });
+            rows += "</tr>";
+        });
 
-function filterTable(){
-    const text = document.getElementById("search").value.toLowerCase();
-    const marka = document.getElementById("markaFilter").value;
-    const filtered = allData.filter(u => {
-        const matchesText = Object.values(u).join(" ").toLowerCase().includes(text);
-        const matchesBrand = !marka || u.Marka === marka;
-        return matchesText && matchesBrand;
-    });
-    buildTable(filtered);
-}
+        tbody.innerHTML = rows;
+    }
 
-// 8. PWA Kaydı
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./service-worker.js').catch(err => console.log("SW hatası:", err));
-    });
-}
+})
+.catch(err => {
+    document.getElementById("versiyon").innerText = "Veri yüklenemedi";
+    console.error(err);
+});
 
-checkAuth();
+// Service Worker
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js");
+}
 </script>
+
 </body>
 </html>
