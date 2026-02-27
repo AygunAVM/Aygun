@@ -6,7 +6,8 @@ const urlsToCache = [
   "./data/kullanicilar.json",
   "./manifest.json",
   "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icons/icon-512.png",
+  "./favicon.ico"
 ];
 
 self.addEventListener("install", e => {
