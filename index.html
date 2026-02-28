@@ -1,126 +1,105 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aygün AVM Fiyat Listesi</title>
-
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#007bff">
-
-<style>
-body { font-family: Arial, sans-serif; margin:0; background:#f4f4f4; color:#333; }
-header { display:flex; justify-content:space-between; align-items:center; padding:15px; background:#fff; border-bottom:2px solid #007bff; }
-#versiyon { font-weight:bold; color:#007bff; }
-.controls { padding:10px; display:flex; gap:8px; flex-wrap:wrap; background:#fff; border-bottom:1px solid #ddd; }
-#search { flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; }
-#markaFilter { padding:8px; border:1px solid #ccc; border-radius:4px; }
-table { width:100%; border-collapse:collapse; background:#fff; margin-top:10px; }
-th, td { padding:10px; border:1px solid #ddd; text-align:left; }
-th { background:#f0f0f0; position:sticky; top:0; z-index:1; }
-tr:nth-child(even) { background:#fafafa; }
-</style>
+    <meta charset="UTF-8">
+    <link rel="icon" href="data:,"> <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Aygün AVM | Satış Paneli</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
-<header>
-    <span id="versiyon">Yükleniyor...</span>
-    <h3>Aygün AVM Fiyat Listesi</h3>
-</header>
-
-<div class="controls">
-    <select id="markaFilter"><option value="">Tüm Markalar</option></select>
-    <input type="text" id="search" placeholder="Ürün, marka veya model ara...">
+<div id="login-screen" class="modal" style="display: flex;">
+    <div class="modal-content" style="max-width: 350px;">
+        <h3 style="text-align:center">Aygün AVM Giriş</h3>
+        <input type="email" id="user-input" placeholder="Email Adresiniz">
+        <input type="password" id="pass-input" placeholder="Şifre">
+        <button class="btn-confirm" onclick="checkAuth()" style="width: 100%; margin-top:10px">Giriş Yap</button>
+        <p id="login-err" style="color: red; display: none; text-align:center">Hatalı Bilgi!</p>
+    </div>
 </div>
 
-<div style="overflow-x:auto; padding:10px;">
-    <table id="urunTable">
-        <thead></thead>
-        <tbody></tbody>
-    </table>
+<div id="app-content" style="display: none;">
+    <div class="sticky-header">
+        <header>
+            <div class="brand">
+                <span id="v-tag">...</span>
+                <span style="font-weight:bold; font-size:1.1rem;">Aygün AVM</span>
+            </div>
+            <div class="cart-icon" onclick="toggleCart()">
+                🛒 <span id="cart-count">0</span>
+            </div>
+        </header>
+
+        <div class="search-area">
+            <input type="text" id="search" placeholder="Aramak için kelimeleri ayırarak yazın (Örn: sam buzd)..." oninput="filterData()" style="width: 100%;">
+        </div>
+    </div>
+
+    <main>
+        <div class="table-container">
+            <table id="product-table">
+                <thead>
+                    <tr>
+                        <th>Ekle</th>
+                        <th>Kod</th>
+                        <th>Ürün</th>
+                        <th>Ürün Gamı</th>
+                        <th>Marka</th>
+                        <th>Stok</th>
+                        <th>D.Kart</th>
+                        <th>4T AWM</th>
+                        <th>Tek Çekim</th>
+                        <th>Nakit</th>
+                        <th>Açıklama</th>
+                    </tr>
+                </thead>
+                <tbody id="product-list"></tbody>
+            </table>
+        </div>
+    </main>
 </div>
 
-<script>
-let allData = [];
-const formatColumns = ["4T AWM", "Tek Çekim", "Nakit"]; // Nokta formatlanacak sütunlar
-
-// JSON yükleme
-async function loadData(){
-    try {
-        const res = await fetch("data/urunler.json?v=" + Date.now());
-        const json = await res.json();
-        allData = json.data || [];
+<div id="cart-modal" class="modal">
+    <div class="modal-content sepet-modal">
+        <div class="sepet-header">
+            <h3 style="margin:0">🛒 Teklif Sepeti</h3>
+            <button class="btn-close-large" onclick="toggleCart()">KAPAT ✕</button>
+        </div>
         
-        // Versiyon sol üstte
-        document.getElementById("versiyon").innerText = json.metadata?.v || "V0";
+        <div id="cart-items" class="cart-scroll-area"></div>
+        
+        <div class="discount-section">
+            <div class="discount-inputs">
+                <span>İndirim:</span>
+                <input type="number" id="discount-input" placeholder="0" oninput="applyDiscount()">
+                <select id="discount-type" onchange="applyDiscount()">
+                    <option value="TRY">₺</option>
+                    <option value="PERCENT">%</option>
+                </select>
+                <select id="price-type-select" style="margin-left: auto;">
+                    <option value="nakit">💰 Nakit</option>
+                    <option value="tek">💳 Tek Çekim</option>
+                    <option value="awm">🗓️ 4T AWM</option>
+                    <option value="dk">🃏 D. Kart</option>
+                </select>
+            </div>
+        </div>
 
-        buildFilter(allData);
-        buildTable(allData);
-    } catch(e) { 
-        console.error("Veri yüklenemedi", e);
-        document.getElementById("versiyon").innerText = "Veri Yok";
-    }
-}
+        <div class="customer-form">
+            <div class="customer-inputs-row">
+                <input type="text" id="cust-name" placeholder="Müşteri Ad Soyad">
+                <input type="tel" id="cust-phone" placeholder="Telefon No">
+            </div>
+            <textarea id="extra-info" placeholder="Ekstra bilgi (Örn: EFT yapılacaktır.)" style="width:100%; height:50px; margin-bottom:10px; border-radius:8px; border:1px solid #ddd; padding:10px; font-family:inherit;"></textarea>
+            <div class="action-buttons">
+                <button class="btn-confirm" onclick="finalizeProposal()">WhatsApp Paylaş</button>
+                <button class="btn-clear" onclick="clearBasket()">Temizle</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-// Tablo oluşturma
-function buildTable(data){
-    const thead = document.querySelector("#urunTable thead");
-    const tbody = document.querySelector("#urunTable tbody");
-    thead.innerHTML = "";
-    tbody.innerHTML = "";
-    if(!data.length) return;
-
-    const keys = Object.keys(data[0]);
-    let headerRow = "<tr>";
-    keys.forEach(k => headerRow += "<th>"+k+"</th>");
-    headerRow += "</tr>";
-    thead.innerHTML = headerRow;
-
-    let bodyRows = "";
-    data.forEach(row=>{
-        bodyRows += "<tr>";
-        keys.forEach(k=>{
-            let val = row[k];
-            if(formatColumns.includes(k)) val = Number(val).toLocaleString('tr-TR');
-            bodyRows += "<td>"+(val ?? "")+"</td>";
-        });
-        bodyRows += "</tr>";
-    });
-    tbody.innerHTML = bodyRows;
-}
-
-// Marka filtresi
-function buildFilter(data){
-    const sel = document.getElementById("markaFilter");
-    const brands = [...new Set(data.map(u=>u.Marka))].filter(x=>x).sort();
-    brands.forEach(b=>{
-        const opt = document.createElement("option");
-        opt.value=b; opt.textContent=b;
-        sel.appendChild(opt);
-    });
-}
-
-function filterTable(){
-    const text = document.getElementById("search").value.toLowerCase();
-    const marka = document.getElementById("markaFilter").value;
-    const filtered = allData.filter(u=>{
-        const matchText = Object.values(u).join(" ").toLowerCase().includes(text);
-        const matchBrand = !marka || u.Marka === marka;
-        return matchText && matchBrand;
-    });
-    buildTable(filtered);
-}
-
-document.getElementById("search").addEventListener("input", filterTable);
-document.getElementById("markaFilter").addEventListener("change", filterTable);
-
-// Service Worker
-if('serviceWorker' in navigator){
-    navigator.serviceWorker.register('service-worker.js');
-}
-
-// Başlangıç
-loadData();
-</script>
+<script src="app.js"></script>
 </body>
 </html>
