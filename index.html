@@ -3,405 +3,98 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aygun Fiyat Sistemi</title>
-
-<style>
-:root{
---primary:#111827;
---accent:#2563eb;
---bg:#f3f4f6;
---danger:#dc2626;
-}
-
-body{
-margin:0;
-font-family: 'Segoe UI',sans-serif;
-background:var(--bg);
-}
-
-/* LOGIN */
-#loginScreen{
-height:100vh;
-display:flex;
-justify-content:center;
-align-items:center;
-background:linear-gradient(135deg,#111827,#1f2937);
-}
-
-.login-box{
-background:white;
-padding:40px;
-border-radius:16px;
-width:350px;
-box-shadow:0 20px 40px rgba(0,0,0,0.3);
-animation:fadeIn .4s ease;
-}
-
-.login-box h2{
-margin-top:0;
-text-align:center;
-}
-
-.input-group{
-margin-bottom:15px;
-}
-
-input, textarea{
-width:100%;
-padding:10px;
-border-radius:8px;
-border:1px solid #ddd;
-}
-
-button{
-padding:10px 14px;
-border:none;
-border-radius:8px;
-background:var(--accent);
-color:white;
-cursor:pointer;
-transition:.15s;
-}
-
-button:active{
-transform:scale(.95);
-box-shadow:inset 0 3px 8px rgba(0,0,0,.4);
-}
-
-button:hover{
-opacity:.9;
-}
-
-/* HEADER */
-header{
-background:var(--primary);
-color:white;
-padding:12px 20px;
-display:flex;
-justify-content:space-between;
-align-items:center;
-position:sticky;
-top:0;
-z-index:50;
-}
-
-#version{
-font-size:13px;
-opacity:.8;
-}
-
-/* TABLE */
-.container{
-padding:15px;
-}
-
-table{
-width:100%;
-border-collapse:collapse;
-background:white;
-border-radius:12px;
-overflow:hidden;
-}
-
-th{
-background:var(--primary);
-color:white;
-padding:10px;
-position:sticky;
-top:60px;
-z-index:5;
-}
-
-td{
-padding:8px;
-border-bottom:1px solid #eee;
-}
-
-.product-title{
-font-weight:600;
-}
-
-.product-desc{
-font-size:12px;
-color:#b91c1c;
-margin-top:4px;
-}
-
-/* CART */
-#cartPanel{
-position:fixed;
-right:0;
-top:0;
-width:520px;
-height:100%;
-background:white;
-box-shadow:-10px 0 30px rgba(0,0,0,.2);
-display:none;
-flex-direction:column;
-z-index:100;
-}
-
-.cart-header{
-background:var(--primary);
-color:white;
-padding:15px;
-position:sticky;
-top:0;
-z-index:10;
-}
-
-.cart-body{
-padding:10px;
-overflow:auto;
-flex:1;
-}
-
-.total-box{
-background:#e5e7eb;
-padding:10px;
-font-weight:bold;
-}
-
-.discount{
-color:var(--danger);
-font-weight:bold;
-}
-
-/* POPUP */
-#changePopup{
-position:fixed;
-top:20px;
-left:50%;
-transform:translateX(-50%);
-background:white;
-padding:20px;
-border-radius:12px;
-box-shadow:0 10px 30px rgba(0,0,0,.3);
-width:400px;
-display:none;
-z-index:200;
-}
-
-@keyframes fadeIn{
-from{opacity:0; transform:translateY(10px);}
-to{opacity:1; transform:translateY(0);}
-}
-
-/* MOBILE */
-@media(max-width:768px){
-#cartPanel{
-width:100%;
-}
-.login-box{
-width:90%;
-}
-}
-</style>
+<title>Aygün AVM | Satış Paneli</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="favicon.ico">
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="loginScreen">
-<div class="login-box">
-<h2>Sistem Giriş</h2>
-<div class="input-group">
-<input type="email" id="email" placeholder="E-Mail">
-</div>
-<div class="input-group">
-<input type="password" id="password" placeholder="Şifre">
-</div>
-<label><input type="checkbox" id="remember"> Beni Hatırla</label>
-<br><br>
-<button onclick="login()">Giriş Yap</button>
-</div>
+<!-- GİRİŞ EKRANI -->
+<div id="login-screen" class="modal-overlay" style="display:flex;">
+  <div class="login-box">
+    <h1 class="brand-logo">aygün<span>®</span></h1>
+    <input type="email" id="user-input" placeholder="Email Adresiniz">
+    <input type="password" id="pass-input" placeholder="Şifre">
+    <label class="remember-label"><input type="checkbox" id="remember-me"> Beni Hatırla</label>
+    <button class="btn-confirm haptic-btn" onclick="checkAuth()">Giriş Yap</button>
+    <p id="login-err" style="display:none; color:red; margin-top:10px; font-size:13px;">Hatalı Giriş!</p>
+  </div>
 </div>
 
-<!-- ANA SİSTEM -->
-<div id="mainSystem" style="display:none;">
+<!-- ANA UYGULAMA -->
+<div id="app-content" style="display:none;">
+  <div class="sticky-header">
+    <header>
+      <div class="brand-area">
+        <span id="v-tag">Yükleniyor...</span>
+        <div class="header-logo">aygün<span>®</span></div>
+      </div>
+      <div class="cart-trigger haptic-btn" onclick="toggleCart()">🛒 SEPET (<span id="cart-count">0</span>)</div>
+    </header>
+    <div class="search-container">
+      <input type="text" id="search" placeholder="Kelime ayırarak ara (Örn: sam buzd)..." oninput="filterData()">
+    </div>
+  </div>
 
-<header>
-<div>Aygun Fiyat Sistemi</div>
-<div id="version"></div>
-<button onclick="toggleCart()">Sepet</button>
-</header>
-
-<div class="container">
-<table>
-<thead>
-<tr>
-<th>Ürün</th>
-<th>Stok</th>
-<th>D.Kart</th>
-<th>4T AWM</th>
-<th>TekÇekim</th>
-<th>Nakit</th>
-<th>Kod</th>
-<th>Gam</th>
-<th>Marka</th>
-<th></th>
-</tr>
-</thead>
-<tbody id="productBody"></tbody>
-</table>
+  <main>
+    <div class="table-wrapper">
+      <table id="product-table">
+        <thead>
+          <tr>
+            <th>Ekle</th><th>Ürün</th><th>Stok</th><th>D.Kart</th>
+            <th>4T AWM</th><th>TekÇekim</th><th>Nakit</th>
+            <th>Açıklama</th><th>Kod</th><th>Ürün Gamı</th><th>Marka</th>
+          </tr>
+        </thead>
+        <tbody id="product-list"></tbody>
+      </table>
+    </div>
+  </main>
 </div>
 
-</div>
-
-<!-- SEPET -->
-<div id="cartPanel">
-<div class="cart-header">
-Sepet
-<button onclick="toggleCart()">Kapat</button>
-</div>
-
-<div class="cart-body">
-<input placeholder="Müşteri Adı">
-<input placeholder="Telefon">
-<textarea placeholder="Not"></textarea>
-<table width="100%">
-<thead>
-<tr>
-<th>Ürün</th>
-<th>Stok</th>
-<th>D.Kart</th>
-<th>4T</th>
-<th>Tek</th>
-<th>Nakit</th>
-<th>Açıklama</th>
-<th>Sil</th>
-</tr>
-</thead>
-<tbody id="cartBody"></tbody>
-</table>
-
-<div class="total-box">
-Alt Toplam: <span id="subtotal">0</span><br>
-İndirim: <input type="number" id="globalDiscount" value="0" onchange="renderCart()"> 
-<div class="discount" id="discountShow"></div>
-Genel Toplam: <span id="grandTotal">0</span>
-</div>
-</div>
+<!-- SEPET MODAL -->
+<div id="cart-modal" class="modal-overlay">
+  <div class="cart-modal-content">
+    <div class="modal-header">
+      <h3>Teklif Taslağı</h3>
+      <button class="close-modal-btn haptic-btn" onclick="toggleCart()">✕ Kapat</button>
+    </div>
+    <div id="cart-items" class="modal-body-scroll"></div>
+    <div class="modal-footer-controls">
+      <div class="footer-section">
+        <label class="section-title">İndirim</label>
+        <div class="input-group">
+          <input type="number" id="discount-input" placeholder="0" oninput="applyDiscount()">
+          <select id="discount-type" onchange="applyDiscount()">
+            <option value="TRY">₺</option>
+            <option value="PERCENT">%</option>
+          </select>
+        </div>
+      </div>
+      <div class="customer-grid">
+        <input type="text" id="cust-name" placeholder="Müşteri Ad Soyad">
+        <input type="tel" id="cust-phone" placeholder="Telefon (05XXXXXXXXX)" maxlength="11">
+        <textarea id="extra-info" placeholder="Ekstra Not"></textarea>
+      </div>
+      <div class="final-actions">
+        <button class="btn-whatsapp haptic-btn" onclick="finalizeProposal()">WhatsApp Gönder</button>
+        <button class="btn-clear-all haptic-btn" onclick="clearBasket()">Temizle</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- DEĞİŞİKLİK POPUP -->
-<div id="changePopup">
-<h4>Son Güncellemeler</h4>
-<div id="changeList"></div>
-<button onclick="closePopup()">X</button>
+<div id="change-popup" class="modal-overlay">
+  <div class="cart-modal-content">
+    <div class="modal-header">
+      <h3>Fiyat Değişiklikleri</h3>
+      <button class="close-modal-btn haptic-btn" onclick="closeChangePopup()">✕ Kapat</button>
+    </div>
+    <div id="change-list" class="modal-body-scroll"></div>
+  </div>
 </div>
 
-<script>
-let urunler=[];
-let cart=[];
-
-/* LOGIN */
-function login(){
-if(document.getElementById("remember").checked){
-localStorage.setItem("remember",document.getElementById("email").value);
-}
-document.getElementById("loginScreen").style.display="none";
-document.getElementById("mainSystem").style.display="block";
-loadJSON();
-}
-
-window.onload=function(){
-if(localStorage.getItem("remember")){
-document.getElementById("email").value=localStorage.getItem("remember");
-}
-}
-
-/* JSON LOAD */
-function loadJSON(){
-fetch("data/urunler.json?v="+Date.now())
-.then(r=>r.json())
-.then(json=>{
-urunler=json.data;
-document.getElementById("version").innerText="Versiyon: "+json.metadata.v;
-renderProducts();
-checkChanges(json);
-});
-}
-
-/* ÜRÜN LİSTE */
-function renderProducts(){
-let body=document.getElementById("productBody");
-body.innerHTML="";
-urunler.forEach(u=>{
-body.innerHTML+=`
-<tr>
-<td>
-<div class="product-title">${u["Ürün"]}</div>
-<div class="product-desc">${u["Açıklama"]||""}</div>
-</td>
-<td>${u["Stok"]}</td>
-<td>${u["Diğer Kartlar"]}</td>
-<td>${u["4T AWM"]}</td>
-<td>${u["Tek Çekim"]}</td>
-<td>${u["Nakit"]}</td>
-<td>${u["Kod"]}</td>
-<td>${u["Ürün Gamı"]}</td>
-<td>${u["Marka"]}</td>
-<td><button onclick='addToCart(${u["Kod"]})'>Ekle</button></td>
-</tr>`;
-});
-}
-
-/* SEPET */
-function toggleCart(){
-let panel=document.getElementById("cartPanel");
-panel.style.display=panel.style.display==="flex"?"none":"flex";
-}
-
-function addToCart(kod){
-let u=urunler.find(x=>x["Kod"]===kod);
-if(!cart.find(c=>c["Kod"]===kod)) cart.push(u);
-renderCart();
-}
-
-function renderCart(){
-let body=document.getElementById("cartBody");
-body.innerHTML="";
-let subtotal=0;
-cart.forEach(u=>{
-subtotal+=u["Nakit"];
-body.innerHTML+=`
-<tr>
-<td>${u["Ürün"]}</td>
-<td>${u["Stok"]}</td>
-<td>${u["Diğer Kartlar"]}</td>
-<td>${u["4T AWM"]}</td>
-<td>${u["Tek Çekim"]}</td>
-<td>${u["Nakit"]}</td>
-<td>${u["Açıklama"]||""}</td>
-<td><button onclick="removeCart(${u["Kod"]})">X</button></td>
-</tr>`;
-});
-let discount=parseInt(document.getElementById("globalDiscount").value)||0;
-let grand=subtotal-discount;
-document.getElementById("subtotal").innerText=subtotal;
-document.getElementById("discountShow").innerText=discount>0?"- "+discount:"";
-document.getElementById("grandTotal").innerText=grand;
-}
-
-function removeCart(kod){
-cart=cart.filter(c=>c["Kod"]!==kod);
-renderCart();
-}
-
-/* JSON DEĞİŞİKLİK KONTROL */
-function checkChanges(json){
-let last=localStorage.getItem("lastVersion");
-if(last && last!==json.metadata.v){
-document.getElementById("changePopup").style.display="block";
-document.getElementById("changeList").innerText="Yeni fiyat güncellemesi yapıldı.";
-}
-localStorage.setItem("lastVersion",json.metadata.v);
-}
-
-function closePopup(){
-document.getElementById("changePopup").style.display="none";
-}
-</script>
-
+<script src="app.js"></script>
 </body>
 </html>
