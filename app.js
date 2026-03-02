@@ -1,229 +1,146 @@
-/* ================================
-   GLOBALS
-================================ */
-let allProducts = [];
-let previousProducts = JSON.parse(localStorage.getItem("prev_products")) || [];
-let basket = JSON.parse(localStorage.getItem("basket")) || [];
-let discountAmount = 0;
-let discountType = "TRY";
+// --- GLOBAL ---
+let allProducts=[]; let basket=JSON.parse(localStorage.getItem('aygun_basket'))||[]; let discountAmount=0; let discountType='TRY';
+let currentUser=JSON.parse(localStorage.getItem('aygun_user'))||null;
 
-/* ================================
-   TOGGLE CART (HATA FIX)
-================================ */
-function toggleCart() {
-  const modal = document.getElementById("cart-modal");
-  modal.style.display = modal.style.display === "flex" ? "none" : "flex";
+// --- VERSİYON ---
+function getIstanbulVersion(){
+    const now=new Date();
+    const gun=String(now.getDate()).padStart(2,'0');
+    const ay=String(now.getMonth()+1).padStart(2,'0');
+    const yil=String(now.getFullYear()).slice(-2);
+    const saat=String(now.getHours()).padStart(2,'0');
+    const dak=String(now.getMinutes()).padStart(2,'0');
+    const dateStr=`${gun}.${ay}.${yil}`;
+    return `v1/${dateStr}-${saat}:${dak}`;
 }
 
-/* ================================
-   LOGIN
-================================ */
-async function checkAuth() {
-  const u = document.getElementById("user-input").value.trim().toLowerCase();
-  const p = document.getElementById("pass-input").value.trim();
-  const remember = document.getElementById("remember-me").checked;
-
-  const res = await fetch("data/kullanicilar.json?" + Date.now());
-  const users = await res.json();
-  const user = users.find(
-    x => x.Email.toLowerCase() === u && x.Sifre === p
-  );
-
-  if (user) {
-    if (remember) localStorage.setItem("user", JSON.stringify(user));
-    document.getElementById("login-screen").style.display = "none";
-    document.getElementById("app-content").style.display = "block";
-    loadData();
-  } else {
-    document.getElementById("login-err").style.display = "block";
-  }
+// --- GİRİŞ ---
+async function checkAuth(){
+  const u=document.getElementById('user-input').value.trim().toLowerCase();
+  const p=document.getElementById('pass-input').value.trim();
+  if(!u||!p){alert("Bilgi eksik"); return;}
+  try{
+    const res=await fetch('data/kullanicilar.json?t='+Date.now());
+    const users=await res.json();
+    const user=users.find(x=>x.Email.toLowerCase()===u && x.Sifre===p);
+    if(user){
+      currentUser=user;
+      if(document.getElementById('remember-me').checked)
+        localStorage.setItem('aygun_user',JSON.stringify(user));
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('app-content').style.display='block';
+      loadData();
+    }else document.getElementById('login-err').style.display='block';
+  }catch(e){alert("Kullanıcı listesi yüklenemedi");}
 }
 
-/* ================================
-   LOAD DATA + VERSION CHECK
-================================ */
-async function loadData() {
-  const res = await fetch("data/urunler.json?" + Date.now());
-  const json = await res.json();
-
-  allProducts = json.data;
-  document.getElementById("v-tag").innerText = json.metadata.v;
-
-  checkChanges(allProducts);
-  renderTable(allProducts);
-  updateCartUI();
+// --- DATA ---
+async function loadData(){
+  try{
+    const res=await fetch('data/urunler.json?v='+Date.now());
+    const json=await res.json();
+    allProducts=Array.isArray(json.data)?json.data:json;
+    document.getElementById('v-tag').innerText=getIstanbulVersion();
+    checkChanges(json);
+    renderTable(allProducts);
+    updateUI();
+  }catch(e){console.error(e); alert("Ürün listesi yüklenemedi");}
 }
 
-/* ================================
-   CHANGE DETECTION SYSTEM
-================================ */
-function checkChanges(newData) {
-  if (!previousProducts.length) {
-    localStorage.setItem("prev_products", JSON.stringify(newData));
-    return;
-  }
-
-  let changes = [];
-
-  newData.forEach(newItem => {
-    const old = previousProducts.find(x => x.Kod === newItem.Kod);
-    if (!old) return;
-
-    let msg = `• ${newItem["Ürün"]}\n`;
-
-    if (old.Stok !== newItem.Stok)
-      msg += `  Stok: ${old.Stok} → ${newItem.Stok}\n`;
-
-    if (old.Nakit !== newItem.Nakit)
-      msg += `  Nakit: ${old.Nakit} → ${newItem.Nakit}\n`;
-
-    if (old["Tek Çekim"] !== newItem["Tek Çekim"])
-      msg += `  Tek Çekim: ${old["Tek Çekim"]} → ${newItem["Tek Çekim"]}\n`;
-
-    if (msg !== `• ${newItem["Ürün"]}\n`)
-      changes.push(msg);
-  });
-
-  if (changes.length) showChangePopup(changes.slice(0, 10));
-
-  localStorage.setItem("prev_products", JSON.stringify(newData));
-}
-
-function showChangePopup(list) {
-  let history = JSON.parse(localStorage.getItem("change_history")) || [];
-  history.push(list.join("\n"));
-  if (history.length > 2) history.shift();
-  localStorage.setItem("change_history", JSON.stringify(history));
-
-  alert("GÜNCELLEME VAR:\n\n" + list.join("\n"));
-}
-
-/* ================================
-   FILTER
-================================ */
-function filterData() {
-  const val = document.getElementById("search").value.toLowerCase().trim();
-  const keys = val.split(" ").filter(x => x);
-  const filtered = allProducts.filter(p => {
-    const row = Object.values(p).join(" ").toLowerCase();
-    return keys.every(k => row.includes(k));
+// --- FİLTRE ---
+function filterData(){
+  const val=document.getElementById('search').value.toLowerCase().trim();
+  const keywords=val.split(" ").filter(k=>k.length>0);
+  const filtered=allProducts.filter(u=>{
+    const rowText=Object.values(u).join(" ").toLowerCase();
+    return keywords.every(kw=>rowText.includes(kw));
   });
   renderTable(filtered);
 }
 
-/* ================================
-   TABLE RENDER
-================================ */
-function renderTable(data) {
-  const list = document.getElementById("product-list");
-
-  list.innerHTML = data.map((u, i) => `
-<tr>
-<td><button onclick="addToBasket(${i})">+</button></td>
-<td><b>${u["Ürün"]}</b></td>
-<td>${u.Stok}</td>
-<td>${u["Diğer Kartlar"]}</td>
-<td>${u["4T AWM"]}</td>
-<td>${u["Tek Çekim"]}</td>
-<td>${u.Nakit}</td>
-<td style="white-space:nowrap;overflow:auto;">${u.Açıklama || ""}</td>
-<td>${u.Kod}</td>
-<td class="small">${u["Ürün Gamı"] || ""}</td>
-<td class="small">${u.Marka || ""}</td>
-</tr>
-`).join("");
+// --- TABLE ---
+function renderTable(data){
+  const list=document.getElementById('product-list');
+  list.innerHTML='';
+  const frag=document.createDocumentFragment();
+  data.forEach((u,idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td><button class="add-btn haptic-btn" onclick="addToBasket(${idx})">+</button></td>
+      <td><b>${u.Ürün}</b><br><span class="product-desc">${u.Açıklama||''}</span></td>
+      <td class="${u.Stok===0?'stok-kritik':u.Stok>10?'stok-bol':''}">${u.Stok}</td>
+      <td>${u['Diğer Kartlar']}</td><td>${u['4T AWM']}</td>
+      <td>${u['Tek Çekim']}</td><td>${u.Nakit}</td>
+      <td>${u.Açıklama||'-'}</td><td>${u.Kod}</td>
+      <td style="font-size:11px;">${u['Ürün Gamı']}</td>
+      <td style="font-size:11px;">${u.Marka}</td>`;
+    frag.appendChild(tr);
+  });
+  list.appendChild(frag);
 }
 
-/* ================================
-   BASKET SYSTEM
-================================ */
-function addToBasket(index) {
-  basket.push(allProducts[index]);
-  localStorage.setItem("basket", JSON.stringify(basket));
-  updateCartUI();
+// --- SEPET ---
+function addToBasket(idx){
+  const p=allProducts[idx];
+  basket.push({
+    urun:p.Ürün,stok:p.Stok,
+    dk:p['Diğer Kartlar'],awm:p['4T AWM'],tek:p['Tek Çekim'],nakit:p.Nakit,
+    aciklama:p.Açıklama||'-'
+  });
+  save();
 }
 
-function clearBasket() {
-  basket = [];
-  localStorage.setItem("basket", JSON.stringify(basket));
-  updateCartUI();
+function save(){
+  localStorage.setItem('aygun_basket',JSON.stringify(basket));
+  updateUI();
 }
 
-function updateCartUI() {
-  document.getElementById("cart-count").innerText = basket.length;
+function removeFromBasket(i){ basket.splice(i,1); save(); }
+function clearBasket(){ if(confirm("Sepeti temizle?")){ basket=[]; discountAmount=0; save(); } }
+function applyDiscount(){
+  discountAmount=parseFloat(document.getElementById('discount-input').value)||0;
+  discountType=document.getElementById('discount-type').value;
+  updateUI();
+}
 
-  const container = document.getElementById("cart-items");
-  if (!container) return;
+// --- SEPET ARAYÜZ ---
+function updateUI(){
+  const cont=document.getElementById('cart-items');
+  const cartCount=document.getElementById('cart-count');
+  if(cartCount) cartCount.innerText=basket.length;
+  if(!cont) return;
+  if(basket.length===0){ cont.innerHTML="<p style='text-align:center; padding:40px; color:#94a3b8;'>Sepetiniz boş</p>"; return; }
 
-  if (!basket.length) {
-    container.innerHTML = "<p style='padding:20px'>Sepet boş</p>";
-    return;
-  }
+  let tDK=0,tAWM=0,tTek=0,tNak=0;
+  let html=`<table style="width:100%; border-collapse:collapse;">
+  <thead><tr style="background:#f8fafc;">
+    <th>Ürün</th><th>Stok</th><th>D.Kart</th><th>4T AWM</th><th>TekÇekim</th><th>Nakit</th><th>Açıklama</th><th>✕</th>
+  </tr></thead><tbody>`;
 
-  let html = `
-  <div class="cart-table-wrapper">
-  <table class="cart-table">
-  <thead>
-  <tr>
-  <th>Ürün</th>
-  <th>Stok</th>
-  <th>D.Kart</th>
-  <th>4T</th>
-  <th>Tek</th>
-  <th>Nakit</th>
-  <th>Sil</th>
-  </tr>
-  </thead>
-  <tbody>`;
-
-  basket.forEach((item, i) => {
-    html += `
-<tr>
-<td>${item["Ürün"]}</td>
-<td>${item.Stok}</td>
-<td>${item["Diğer Kartlar"]}</td>
-<td>${item["4T AWM"]}</td>
-<td>${item["Tek Çekim"]}</td>
-<td>${item.Nakit}</td>
-<td><button onclick="removeItem(${i})">✕</button></td>
-</tr>`;
+  basket.forEach((i,idx)=>{
+    tDK+=i.dk; tAWM+=i.awm; tTek+=i.tek; tNak+=i.nakit;
+    html+=`<tr>
+      <td><b>${i.urun}</b></td>
+      <td style="color:${i.stok===0?'red':'inherit'}">${i.stok}</td>
+      <td>${i.dk}</td><td>${i.awm}</td><td>${i.tek}</td><td>${i.nakit}</td>
+      <td><small>${i.aciklama}</small></td>
+      <td><button class="haptic-btn" onclick="removeFromBasket(${idx})" style="color:red;">✕</button></td>
+    </tr>`;
   });
 
-  html += "</tbody></table></div>";
-  container.innerHTML = html;
-}
-
-function removeItem(i) {
-  basket.splice(i, 1);
-  localStorage.setItem("basket", JSON.stringify(basket));
-  updateCartUI();
-}
-
-/* ================================
-   WHATSAPP VALIDATION
-================================ */
-function finalizeProposal() {
-  let phone = document.getElementById("cust-phone").value.trim();
-  if (!/^05\d{9}$/.test(phone)) {
-    alert("Telefon 05XXXXXXXXX formatında olmalı");
-    return;
+  const calcD=t=>discountType==='TRY'?discountAmount: t*discountAmount/100;
+  if(discountAmount>0){
+    html+=`<tr style="color:red; font-weight:bold; background:#fff5f5;">
+      <td colspan="2" align="right">İndirim:</td>
+      <td>-${calcD(tDK)}</td><td>-${calcD(tAWM)}</td><td>-${calcD(tTek)}</td><td>-${calcD(tNak)}</td>
+      <td colspan="2"></td></tr>`;
   }
-  phone = "90" + phone.substring(1);
-
-  let msg = "Aygün AVM Teklif\n\n";
-  basket.forEach(i => msg += i["Ürün"] + "\n");
-
-  window.open("https://wa.me/" + phone + "?text=" + encodeURIComponent(msg));
+  html+=`<tr style="background:var(--primary); color:white; font-weight:bold;">
+    <td colspan="2" align="right">NET TOPLAM:</td>
+    <td>${tDK-calcD(tDK)}</td><td>${tAWM-calcD(tAWM)}</td><td>${tTek-calcD(tTek)}</td><td>${tNak-calcD(tNak)}</td>
+    <td colspan="2"></td></tr></tbody></table>`;
+  cont.innerHTML=html;
 }
 
-/* ================================
-   AUTO LOGIN
-================================ */
-window.onload = () => {
-  const user = localStorage.getItem("user");
-  if (user) {
-    document.getElementById("login-screen").style.display = "none";
-    document.getElementById("app-content").style.display = "block";
-    loadData();
-  }
-};
+// --- SEPET TOGGLE ---
+function toggleCart(){ const m=document.getElementById('cart-modal'); if(m) m.style
