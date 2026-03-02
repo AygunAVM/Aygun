@@ -10,14 +10,16 @@
 <body>
 
 <!-- GİRİŞ EKRANI -->
-<div id="login-screen" class="modal-overlay" style="display:flex;">
+<div id="login-screen" class="modal-overlay flex-center">
   <div class="login-box">
-    <h1 class="brand-logo">aygün<span>®</span></h1>
+    <h1 class="brand-logo">Aygün<span>®</span></h1>
     <input type="email" id="user-input" placeholder="Email Adresiniz">
     <input type="password" id="pass-input" placeholder="Şifre">
-    <label class="remember-label"><input type="checkbox" id="remember-me"> Beni Hatırla</label>
+    <label class="remember-label">
+      <input type="checkbox" id="remember-me"> Beni Hatırla
+    </label>
     <button class="btn-confirm haptic-btn" onclick="checkAuth()">Giriş Yap</button>
-    <p id="login-err" style="display:none; color:red; margin-top:10px; font-size:13px;">Hatalı Giriş!</p>
+    <p id="login-err" class="login-error">Hatalı giriş!</p>
   </div>
 </div>
 
@@ -26,13 +28,13 @@
   <div class="sticky-header">
     <header>
       <div class="brand-area">
-        <span id="v-tag">Yükleniyor...</span>
-        <div class="header-logo">aygün<span>®</span></div>
+        <span id="v-tag">v2 Yükleniyor...</span>
+        <div class="header-logo">Aygün<span>®</span></div>
       </div>
       <div class="cart-trigger haptic-btn" onclick="toggleCart()">🛒 SEPET (<span id="cart-count">0</span>)</div>
     </header>
     <div class="search-container">
-      <input type="text" id="search" placeholder="Kelime ayırarak ara (Örn: sam buzd)..." oninput="filterData()">
+      <input type="text" id="search" placeholder="Kelime ayırarak ara (Örn: sam buzd)" oninput="filterData()">
     </div>
   </div>
 
@@ -53,23 +55,20 @@
 </div>
 
 <!-- SEPET MODAL -->
-<div id="cart-modal" class="modal-overlay">
+<div id="cart-modal" class="modal-overlay flex-center">
   <div class="cart-modal-content">
     <div class="modal-header">
-      <h3>Teklif Taslağı</h3>
+      <h3>Sepetiniz</h3>
       <button class="close-modal-btn haptic-btn" onclick="toggleCart()">✕ Kapat</button>
     </div>
     <div id="cart-items" class="modal-body-scroll"></div>
     <div class="modal-footer-controls">
-      <div class="footer-section">
-        <label class="section-title">İndirim</label>
-        <div class="input-group">
-          <input type="number" id="discount-input" placeholder="0" oninput="applyDiscount()">
-          <select id="discount-type" onchange="applyDiscount()">
-            <option value="TRY">₺</option>
-            <option value="PERCENT">%</option>
-          </select>
-        </div>
+      <div class="input-group">
+        <input type="number" id="discount-input" placeholder="İndirim" oninput="applyDiscount()">
+        <select id="discount-type" onchange="applyDiscount()">
+          <option value="TRY">₺</option>
+          <option value="PERCENT">%</option>
+        </select>
       </div>
       <div class="customer-grid">
         <input type="text" id="cust-name" placeholder="Müşteri Ad Soyad">
@@ -81,17 +80,6 @@
         <button class="btn-clear-all haptic-btn" onclick="clearBasket()">Temizle</button>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- DEĞİŞİKLİK POPUP -->
-<div id="change-popup" class="modal-overlay">
-  <div class="cart-modal-content">
-    <div class="modal-header">
-      <h3>Fiyat Değişiklikleri</h3>
-      <button class="close-modal-btn haptic-btn" onclick="closeChangePopup()">✕ Kapat</button>
-    </div>
-    <div id="change-list" class="modal-body-scroll"></div>
   </div>
 </div>
 
