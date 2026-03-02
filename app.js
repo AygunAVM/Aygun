@@ -143,4 +143,27 @@ function updateUI(){
 }
 
 // --- SEPET TOGGLE ---
-function toggleCart(){ const m=document.getElementById('cart-modal'); if(m) m.style
+function toggleCart(){ const m=document.getElementById('cart-modal'); if(m) m.style.display=m.style.display==='flex'?'none':'flex'; }
+
+// --- DEĞİŞİKLİKLER ---
+function checkChanges(json){
+  const last=JSON.parse(localStorage.getItem('last_json'))||{};
+  const changes=[];
+  json.data.forEach(p=>{
+    const old=last.data?.find(x=>x.Kod===p.Kod);
+    if(old){
+      ['Nakit','Tek Çekim','4T AWM','Diğer Kartlar'].forEach(f=>{
+        if(old[f]!==p[f]){
+          changes.push(`${p.Ürün} ${f}: ${old[f]} → ${p[f]}`);
+        }
+      });
+    }
+  });
+  if(changes.length>0){
+    const lst=document.getElementById('change-list');
+    lst.innerHTML=changes.map(c=>`<p>${c}</p>`).join('');
+    document.getElementById('change-popup').style.display='flex';
+    localStorage.setItem('last_json',JSON.stringify(json));
+  }else localStorage.setItem('last_json',JSON.stringify(json));
+}
+function closeChangePopup(){ document.getElementById('change-popup').style.display='none'; }
