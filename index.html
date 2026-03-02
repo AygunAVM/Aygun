@@ -3,86 +3,102 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aygün AVM | Satış Paneli</title>
-<link rel="stylesheet" href="style.css">
+<title>Aygün AVM Fiyat Paneli</title>
+<link rel="stylesheet" href="style.css?v=20260302">
 <link rel="icon" href="favicon.ico">
+<link rel="manifest" href="manifest.json">
+<script src="app.js?v=20260302" defer></script>
 </head>
 <body>
 
-<!-- GİRİŞ EKRANI -->
-<div id="login-screen" class="modal-overlay flex-center">
+<!-- Kullanıcı Giriş Ekranı -->
+<div id="login-screen" class="overlay">
   <div class="login-box">
-    <h1 class="brand-logo">Aygün<span>®</span></h1>
-    <input type="email" id="user-input" placeholder="Email Adresiniz">
-    <input type="password" id="pass-input" placeholder="Şifre">
-    <label class="remember-label">
-      <input type="checkbox" id="remember-me"> Beni Hatırla
-    </label>
-    <button class="btn-confirm haptic-btn" onclick="checkAuth()">Giriş Yap</button>
-    <p id="login-err" class="login-error">Hatalı giriş!</p>
+    <h2>Giriş Yap</h2>
+    <input type="email" id="login-email" placeholder="Email">
+    <input type="password" id="login-pass" placeholder="Şifre">
+    <label><input type="checkbox" id="remember"> Beni Hatırla</label>
+    <button onclick="loginUser()">Giriş</button>
   </div>
 </div>
 
-<!-- ANA UYGULAMA -->
-<div id="app-content" style="display:none;">
-  <div class="sticky-header">
-    <header>
-      <div class="brand-area">
-        <span id="v-tag">v2 Yükleniyor...</span>
-        <div class="header-logo">Aygün<span>®</span></div>
-      </div>
-      <div class="cart-trigger haptic-btn" onclick="toggleCart()">🛒 SEPET (<span id="cart-count">0</span>)</div>
-    </header>
-    <div class="search-container">
-      <input type="text" id="search" placeholder="Kelime ayırarak ara (Örn: sam buzd)" oninput="filterData()">
-    </div>
+<!-- Değişiklik popup -->
+<div id="change-popup" class="overlay hide">
+  <div class="popup-box">
+    <h3>Son Değişiklikler</h3>
+    <div id="change-list"></div>
+    <button onclick="closeChangePopup()">X Kapat</button>
+  </div>
+</div>
+
+<!-- Ana ekran -->
+<div id="main-screen" class="hide">
+  <div class="header">
+    <h1>Aygün AVM Fiyat Paneli</h1>
+    <span id="version">Versiyon: --</span>
+    <input type="text" id="search-box" placeholder="Ürün Ara..." onkeyup="searchProducts()">
   </div>
 
-  <main>
-    <div class="table-wrapper">
-      <table id="product-table">
+  <div class="table-container">
+    <table id="product-table">
+      <thead>
+        <tr>
+          <th>Ürün</th>
+          <th>Stok</th>
+          <th>D.Kart</th>
+          <th>4T AWM</th>
+          <th>Tek Çekim</th>
+          <th>Nakit</th>
+          <th>Açıklama</th>
+          <th>Kod</th>
+          <th>Gam</th>
+          <th>Marka</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <button id="open-cart" onclick="toggleCart()">Sepet</button>
+
+  <!-- Sepet ekranı -->
+  <div id="cart-screen" class="overlay hide">
+    <div class="cart-box">
+      <h2>Sepetim</h2>
+      <table id="cart-table">
         <thead>
           <tr>
-            <th>Ekle</th><th>Ürün</th><th>Stok</th><th>D.Kart</th>
-            <th>4T AWM</th><th>TekÇekim</th><th>Nakit</th>
-            <th>Açıklama</th><th>Kod</th><th>Ürün Gamı</th><th>Marka</th>
+            <th>Ürün</th>
+            <th>Stok</th>
+            <th>D.Kart</th>
+            <th>4T AWM</th>
+            <th>Tek Çekim</th>
+            <th>Nakit</th>
+            <th>Açıklama</th>
+            <th>Müşteri</th>
+            <th>Telefon</th>
+            <th>Not</th>
+            <th>İndirim</th>
+            <th>Sil</th>
           </tr>
         </thead>
-        <tbody id="product-list"></tbody>
+        <tbody></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2">Toplam</td>
+            <td id="total-dk">0</td>
+            <td id="total-awm">0</td>
+            <td id="total-tek">0</td>
+            <td id="total-nakit">0</td>
+            <td colspan="6"></td>
+          </tr>
+        </tfoot>
       </table>
-    </div>
-  </main>
-</div>
-
-<!-- SEPET MODAL -->
-<div id="cart-modal" class="modal-overlay flex-center">
-  <div class="cart-modal-content">
-    <div class="modal-header">
-      <h3>Sepetiniz</h3>
-      <button class="close-modal-btn haptic-btn" onclick="toggleCart()">✕ Kapat</button>
-    </div>
-    <div id="cart-items" class="modal-body-scroll"></div>
-    <div class="modal-footer-controls">
-      <div class="input-group">
-        <input type="number" id="discount-input" placeholder="İndirim" oninput="applyDiscount()">
-        <select id="discount-type" onchange="applyDiscount()">
-          <option value="TRY">₺</option>
-          <option value="PERCENT">%</option>
-        </select>
-      </div>
-      <div class="customer-grid">
-        <input type="text" id="cust-name" placeholder="Müşteri Ad Soyad">
-        <input type="tel" id="cust-phone" placeholder="Telefon (05XXXXXXXXX)" maxlength="11">
-        <textarea id="extra-info" placeholder="Ekstra Not"></textarea>
-      </div>
-      <div class="final-actions">
-        <button class="btn-whatsapp haptic-btn" onclick="finalizeProposal()">WhatsApp Gönder</button>
-        <button class="btn-clear-all haptic-btn" onclick="clearBasket()">Temizle</button>
-      </div>
+      <button onclick="sendWhatsApp()">WhatsApp Gönder</button>
+      <button onclick="closeCart()">Kapat</button>
     </div>
   </div>
 </div>
 
-<script src="app.js"></script>
 </body>
 </html>
