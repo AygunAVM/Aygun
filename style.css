@@ -1,16 +1,45 @@
-body{margin:0;font-family:Arial,sans-serif;zoom:1;}
-.hidden{display:none;}
-header{position:sticky;top:0;background:#27ae60;color:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;z-index:100;}
-header input{padding:5px;font-size:16px;}
-table{width:100%;border-collapse:collapse;margin-top:10px;}
-th,td{border:1px solid #ccc;padding:5px;text-align:center;}
-th{position:sticky;top:0;background:#2ecc71;color:#fff;z-index:10;}
-#product-table td .desc{display:block;font-size:12px;color:#555;}
-.btn{padding:8px 12px;background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;transition:0.2s;}
-.btn:active{transform:scale(0.95);}
-#cart-panel{position:fixed;right:0;top:100px;width:400px;max-width:90%;background:#f9f9f9;border:1px solid #ccc;padding:10px;overflow:auto;max-height:80vh;}
-#login-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:1000;}
-.login-box{background:#fff;padding:20px;border-radius:10px;width:300px;display:flex;flex-direction:column;gap:10px;}
-.login-box input{padding:8px;font-size:14px;}
-#cart-table th, #cart-table td{font-size:13px;}
-.red{color:red;font-weight:bold;}
+:root {
+  --primary:#2c3e50; --accent:#27ae60; --danger:#e74c3c; --bg:#f8fafc;
+}
+body { font-family:'Segoe UI',sans-serif; margin:0; background:var(--bg); zoom:1; }
+
+/* HAPTIC BUTON */
+.haptic-btn { cursor:pointer; transition:all 0.1s ease; border:none; }
+.haptic-btn:active { transform:scale(0.85); filter:brightness(0.8); }
+
+/* LOGO */
+.header-logo,.brand-logo { font-weight:900;color:var(--primary); letter-spacing:-2px; text-transform:lowercase; }
+.header-logo span,.brand-logo span { color:var(--danger); font-size:0.8rem; vertical-align:top; font-weight:normal; }
+.header-logo { font-size:1.8rem; }
+.brand-logo { font-size:3rem;margin:0 0 10px 0; }
+
+/* STICKY HEADER */
+.sticky-header { position:fixed; top:0; width:100%; background:white; z-index:1000; box-shadow:0 2px 15px rgba(0,0,0,0.08); }
+header { display:flex; justify-content:space-between; padding:10px 15px; align-items:center; }
+.search-container { padding:0 15px 12px 15px; margin-top:-5px; }
+#search { width:100%; padding:15px; border-radius:12px; border:2px solid #edf2f7; font-size:16px; outline:none; box-sizing:border-box; }
+
+/* TABLO */
+main { margin-top:135px; padding:10px; }
+.table-wrapper { background:white; border-radius:12px; overflow:auto; height:calc(100vh - 165px); }
+table { width:100%; border-collapse:collapse; min-width:1400px; }
+thead th { position:sticky; top:0; background:#f1f5f9; z-index:10; padding:15px 10px; text-align:left; font-size:12px; color:#64748b; border-bottom:2px solid #e2e8f0; }
+tbody td { padding:10px; border-bottom:1px solid #f1f5f9; font-size:13px; }
+.product-desc { font-size:11px; color:#4b5563; }
+
+/* MODAL */
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:9999; align-items:center; justify-content:center; }
+.cart-modal-content { background:white; width:100%; max-width:900px; height:90vh; display:flex; flex-direction:column; overflow:hidden; border-radius:12px; }
+.modal-header { padding:20px; background:var(--primary); color:white; display:flex; justify-content:space-between; }
+.modal-body-scroll { flex:1; overflow-y:auto; padding:15px; }
+.modal-footer-controls { padding:20px; background:white; border-top:1px solid #e2e8f0; }
+.section-title { font-size:11px; font-weight:bold; color:#94a3b8; text-transform:uppercase; margin-bottom:8px; display:block; }
+.input-group { display:flex; gap:8px; margin-bottom:15px; }
+.input-group input, .input-group select { padding:12px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:14px; }
+.customer-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+.customer-grid textarea { grid-column:span 2; height:60px; resize:none; }
+.final-actions { display:flex; gap:10px; margin-top:20px; }
+.btn-whatsapp { flex:2; background:var(--accent); color:white; padding:18px; border-radius:15px; font-weight:bold; font-size:16px; }
+.btn-clear-all { flex:1; background:#cbd5e1; color:#475569; padding:18px; border-radius:15px; font-weight:bold; }
+.stok-kritik { color:var(--danger)!important; font-weight:bold; }
+.stok-bol { color:var(--accent)!important; font-weight:bold; font-weight:bold; }
