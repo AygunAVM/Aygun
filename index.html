@@ -3,102 +3,89 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aygün AVM Fiyat Paneli</title>
-<link rel="stylesheet" href="style.css?v=20260302">
-<link rel="icon" href="favicon.ico">
+<title>Aygün AVM Satış Paneli</title>
+<link rel="icon" href="favicon.ico" type="image/x-icon">
 <link rel="manifest" href="manifest.json">
-<script src="app.js?v=20260302" defer></script>
+<link rel="stylesheet" href="style.css?v=20260302">
 </head>
 <body>
-
 <!-- Kullanıcı Giriş Ekranı -->
 <div id="login-screen" class="overlay">
   <div class="login-box">
     <h2>Giriş Yap</h2>
-    <input type="email" id="login-email" placeholder="Email">
-    <input type="password" id="login-pass" placeholder="Şifre">
+    <input type="email" id="email" placeholder="E-mail">
+    <input type="password" id="password" placeholder="Şifre">
     <label><input type="checkbox" id="remember"> Beni Hatırla</label>
-    <button onclick="loginUser()">Giriş</button>
+    <button onclick="login()" class="btn">Giriş</button>
   </div>
 </div>
 
-<!-- Değişiklik popup -->
-<div id="change-popup" class="overlay hide">
-  <div class="popup-box">
-    <h3>Son Değişiklikler</h3>
-    <div id="change-list"></div>
-    <button onclick="closeChangePopup()">X Kapat</button>
-  </div>
-</div>
+<!-- Ana Panel -->
+<div id="main-panel" class="hidden">
+  <header>
+    <h1>Aygün AVM Satış Paneli</h1>
+    <span id="version">Versiyon: V2 2026.03.02 15:28</span>
+    <input type="text" id="search" placeholder="Arama..." oninput="filterProducts()">
+  </header>
 
-<!-- Ana ekran -->
-<div id="main-screen" class="hide">
-  <div class="header">
-    <h1>Aygün AVM Fiyat Paneli</h1>
-    <span id="version">Versiyon: --</span>
-    <input type="text" id="search-box" placeholder="Ürün Ara..." onkeyup="searchProducts()">
-  </div>
+  <table id="product-table">
+    <thead>
+      <tr>
+        <th>Ürün</th>
+        <th>Stok</th>
+        <th>D.Kart</th>
+        <th>4T AWM</th>
+        <th>TekÇekim</th>
+        <th>Nakit</th>
+        <th>Açıklama</th>
+        <th>Kod</th>
+        <th>Gam</th>
+        <th>Marka</th>
+        <th>Sepet</th>
+      </tr>
+    </thead>
+    <tbody id="product-body"></tbody>
+  </table>
 
-  <div class="table-container">
-    <table id="product-table">
+  <!-- Sepet Paneli -->
+  <div id="cart-panel">
+    <h2>Sepet</h2>
+    <table id="cart-table">
       <thead>
         <tr>
           <th>Ürün</th>
           <th>Stok</th>
           <th>D.Kart</th>
           <th>4T AWM</th>
-          <th>Tek Çekim</th>
+          <th>TekÇekim</th>
           <th>Nakit</th>
           <th>Açıklama</th>
-          <th>Kod</th>
-          <th>Gam</th>
-          <th>Marka</th>
+          <th>Müşteri</th>
+          <th>Telefon</th>
+          <th>İndirim</th>
+          <th>Not</th>
+          <th>Sil</th>
         </tr>
       </thead>
-      <tbody></tbody>
+      <tbody id="cart-body"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2">Toplam:</td>
+          <td id="sum-dk">0</td>
+          <td id="sum-4t">0</td>
+          <td id="sum-tek">0</td>
+          <td id="sum-nakit">0</td>
+          <td colspan="6"></td>
+        </tr>
+      </tfoot>
     </table>
-  </div>
-
-  <button id="open-cart" onclick="toggleCart()">Sepet</button>
-
-  <!-- Sepet ekranı -->
-  <div id="cart-screen" class="overlay hide">
-    <div class="cart-box">
-      <h2>Sepetim</h2>
-      <table id="cart-table">
-        <thead>
-          <tr>
-            <th>Ürün</th>
-            <th>Stok</th>
-            <th>D.Kart</th>
-            <th>4T AWM</th>
-            <th>Tek Çekim</th>
-            <th>Nakit</th>
-            <th>Açıklama</th>
-            <th>Müşteri</th>
-            <th>Telefon</th>
-            <th>Not</th>
-            <th>İndirim</th>
-            <th>Sil</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-        <tfoot>
-          <tr>
-            <td colspan="2">Toplam</td>
-            <td id="total-dk">0</td>
-            <td id="total-awm">0</td>
-            <td id="total-tek">0</td>
-            <td id="total-nakit">0</td>
-            <td colspan="6"></td>
-          </tr>
-        </tfoot>
-      </table>
-      <button onclick="sendWhatsApp()">WhatsApp Gönder</button>
-      <button onclick="closeCart()">Kapat</button>
-    </div>
+    <input type="text" id="cust-name" placeholder="Müşteri Adı">
+    <input type="text" id="cust-phone" placeholder="Telefon (0XXXXXXXXXX)">
+    <input type="text" id="extra-info" placeholder="Not">
+    <button onclick="finalizeProposal()" class="btn">WhatsApp Gönder</button>
   </div>
 </div>
 
+<script src="app.js?v=20260302"></script>
 </body>
 </html>
