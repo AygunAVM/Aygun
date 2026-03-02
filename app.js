@@ -1,17 +1,14 @@
-// --- GLOBAL ---
-let allProducts=[]; let basket=JSON.parse(localStorage.getItem('aygun_basket'))||[]; let discountAmount=0; let discountType='TRY';
+let allProducts=[], basket=JSON.parse(localStorage.getItem('aygun_basket'))||[], discountAmount=0, discountType='TRY';
 let currentUser=JSON.parse(localStorage.getItem('aygun_user'))||null;
 
-// --- VERSİYON ---
 function getIstanbulVersion(){
-    const now=new Date();
-    const gun=String(now.getDate()).padStart(2,'0');
-    const ay=String(now.getMonth()+1).padStart(2,'0');
-    const yil=String(now.getFullYear()).slice(-2);
-    const saat=String(now.getHours()).padStart(2,'0');
-    const dak=String(now.getMinutes()).padStart(2,'0');
-    const dateStr=`${gun}.${ay}.${yil}`;
-    return `v1/${dateStr}-${saat}:${dak}`;
+  const now=new Date();
+  const d=String(now.getDate()).padStart(2,'0');
+  const m=String(now.getMonth()+1).padStart(2,'0');
+  const y=String(now.getFullYear());
+  const h=String(now.getHours()).padStart(2,'0');
+  const min=String(now.getMinutes()).padStart(2,'0');
+  return `V2 ${d}.${m}.${y} ${h}:${min}`;
 }
 
 // --- GİRİŞ ---
@@ -41,13 +38,12 @@ async function loadData(){
     const json=await res.json();
     allProducts=Array.isArray(json.data)?json.data:json;
     document.getElementById('v-tag').innerText=getIstanbulVersion();
-    checkChanges(json);
     renderTable(allProducts);
     updateUI();
   }catch(e){console.error(e); alert("Ürün listesi yüklenemedi");}
 }
 
-// --- FİLTRE ---
+// --- FILTER ---
 function filterData(){
   const val=document.getElementById('search').value.toLowerCase().trim();
   const keywords=val.split(" ").filter(k=>k.length>0);
@@ -68,7 +64,7 @@ function renderTable(data){
     tr.innerHTML=`
       <td><button class="add-btn haptic-btn" onclick="addToBasket(${idx})">+</button></td>
       <td><b>${u.Ürün}</b><br><span class="product-desc">${u.Açıklama||''}</span></td>
-      <td class="${u.Stok===0?'stok-kritik':u.Stok>10?'stok-bol':''}">${u.Stok}</td>
+      <td>${u.Stok}</td>
       <td>${u['Diğer Kartlar']}</td><td>${u['4T AWM']}</td>
       <td>${u['Tek Çekim']}</td><td>${u.Nakit}</td>
       <td>${u.Açıklama||'-'}</td><td>${u.Kod}</td>
@@ -89,21 +85,12 @@ function addToBasket(idx){
   });
   save();
 }
-
-function save(){
-  localStorage.setItem('aygun_basket',JSON.stringify(basket));
-  updateUI();
-}
-
+function save(){ localStorage.setItem('aygun_basket',JSON.stringify(basket)); updateUI(); }
 function removeFromBasket(i){ basket.splice(i,1); save(); }
 function clearBasket(){ if(confirm("Sepeti temizle?")){ basket=[]; discountAmount=0; save(); } }
-function applyDiscount(){
-  discountAmount=parseFloat(document.getElementById('discount-input').value)||0;
-  discountType=document.getElementById('discount-type').value;
-  updateUI();
-}
+function applyDiscount(){ discountAmount=parseFloat(document.getElementById('discount-input').value)||0; discountType=document.getElementById('discount-type').value; updateUI(); }
 
-// --- SEPET ARAYÜZ ---
+// SEPET ARAYÜZ
 function updateUI(){
   const cont=document.getElementById('cart-items');
   const cartCount=document.getElementById('cart-count');
@@ -121,7 +108,7 @@ function updateUI(){
     tDK+=i.dk; tAWM+=i.awm; tTek+=i.tek; tNak+=i.nakit;
     html+=`<tr>
       <td><b>${i.urun}</b></td>
-      <td style="color:${i.stok===0?'red':'inherit'}">${i.stok}</td>
+      <td>${i.stok}</td>
       <td>${i.dk}</td><td>${i.awm}</td><td>${i.tek}</td><td>${i.nakit}</td>
       <td><small>${i.aciklama}</small></td>
       <td><button class="haptic-btn" onclick="removeFromBasket(${idx})" style="color:red;">✕</button></td>
@@ -144,26 +131,3 @@ function updateUI(){
 
 // --- SEPET TOGGLE ---
 function toggleCart(){ const m=document.getElementById('cart-modal'); if(m) m.style.display=m.style.display==='flex'?'none':'flex'; }
-
-// --- DEĞİŞİKLİKLER ---
-function checkChanges(json){
-  const last=JSON.parse(localStorage.getItem('last_json'))||{};
-  const changes=[];
-  json.data.forEach(p=>{
-    const old=last.data?.find(x=>x.Kod===p.Kod);
-    if(old){
-      ['Nakit','Tek Çekim','4T AWM','Diğer Kartlar'].forEach(f=>{
-        if(old[f]!==p[f]){
-          changes.push(`${p.Ürün} ${f}: ${old[f]} → ${p[f]}`);
-        }
-      });
-    }
-  });
-  if(changes.length>0){
-    const lst=document.getElementById('change-list');
-    lst.innerHTML=changes.map(c=>`<p>${c}</p>`).join('');
-    document.getElementById('change-popup').style.display='flex';
-    localStorage.setItem('last_json',JSON.stringify(json));
-  }else localStorage.setItem('last_json',JSON.stringify(json));
-}
-function closeChangePopup(){ document.getElementById('change-popup').style.display='none'; }
