@@ -6,124 +6,259 @@
 <title>Aygun Fiyat Sistemi</title>
 
 <style>
+:root{
+--primary:#111827;
+--accent:#2563eb;
+--bg:#f3f4f6;
+--danger:#dc2626;
+}
+
 body{
-    font-family: Arial, sans-serif;
-    margin:0;
-    background:#f4f6f9;
+margin:0;
+font-family: 'Segoe UI',sans-serif;
+background:var(--bg);
 }
 
+/* LOGIN */
+#loginScreen{
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background:linear-gradient(135deg,#111827,#1f2937);
+}
+
+.login-box{
+background:white;
+padding:40px;
+border-radius:16px;
+width:350px;
+box-shadow:0 20px 40px rgba(0,0,0,0.3);
+animation:fadeIn .4s ease;
+}
+
+.login-box h2{
+margin-top:0;
+text-align:center;
+}
+
+.input-group{
+margin-bottom:15px;
+}
+
+input, textarea{
+width:100%;
+padding:10px;
+border-radius:8px;
+border:1px solid #ddd;
+}
+
+button{
+padding:10px 14px;
+border:none;
+border-radius:8px;
+background:var(--accent);
+color:white;
+cursor:pointer;
+transition:.15s;
+}
+
+button:active{
+transform:scale(.95);
+box-shadow:inset 0 3px 8px rgba(0,0,0,.4);
+}
+
+button:hover{
+opacity:.9;
+}
+
+/* HEADER */
 header{
-    background:#1f2937;
-    color:white;
-    padding:15px;
-    font-size:20px;
+background:var(--primary);
+color:white;
+padding:12px 20px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+position:sticky;
+top:0;
+z-index:50;
 }
 
+#version{
+font-size:13px;
+opacity:.8;
+}
+
+/* TABLE */
 .container{
-    padding:15px;
+padding:15px;
 }
 
-/* TABLO */
 table{
-    width:100%;
-    border-collapse:collapse;
-    background:white;
+width:100%;
+border-collapse:collapse;
+background:white;
+border-radius:12px;
+overflow:hidden;
 }
 
 th{
-    background:#111827;
-    color:white;
-    padding:10px;
-    position:sticky;
-    top:0;
-    z-index:5;
+background:var(--primary);
+color:white;
+padding:10px;
+position:sticky;
+top:60px;
+z-index:5;
 }
 
 td{
-    padding:8px;
-    border-bottom:1px solid #eee;
+padding:8px;
+border-bottom:1px solid #eee;
 }
 
-tr:hover{
-    background:#f3f4f6;
-}
-
-/* Ürün hücresi */
-.product-cell{
-    font-weight:bold;
+.product-title{
+font-weight:600;
 }
 
 .product-desc{
-    font-size:12px;
-    color:#b91c1c;
-    margin-top:4px;
+font-size:12px;
+color:#b91c1c;
+margin-top:4px;
 }
 
-/* Buton */
-.btn{
-    padding:5px 8px;
-    background:#2563eb;
-    color:white;
-    border:none;
-    cursor:pointer;
-    border-radius:4px;
-}
-
-/* Sepet */
+/* CART */
 #cartPanel{
-    position:fixed;
-    right:0;
-    top:0;
-    width:500px;
-    height:100%;
-    background:white;
-    box-shadow:-5px 0 15px rgba(0,0,0,0.1);
-    overflow:auto;
-    display:none;
-    z-index:1000;
+position:fixed;
+right:0;
+top:0;
+width:520px;
+height:100%;
+background:white;
+box-shadow:-10px 0 30px rgba(0,0,0,.2);
+display:none;
+flex-direction:column;
+z-index:100;
 }
 
-#cartHeader{
-    background:#111827;
-    color:white;
-    padding:15px;
-    font-size:18px;
-    position:sticky;
-    top:0;
-    z-index:10;
+.cart-header{
+background:var(--primary);
+color:white;
+padding:15px;
+position:sticky;
+top:0;
+z-index:10;
 }
 
-.cart-table th{
-    position:sticky;
-    top:50px;
-    background:#374151;
+.cart-body{
+padding:10px;
+overflow:auto;
+flex:1;
 }
 
-.total-row{
-    background:#e5e7eb;
-    font-weight:bold;
+.total-box{
+background:#e5e7eb;
+padding:10px;
+font-weight:bold;
 }
 
-.discount-input{
-    width:70px;
+.discount{
+color:var(--danger);
+font-weight:bold;
 }
 
-.discount-value{
-    color:red;
-    font-weight:bold;
+/* POPUP */
+#changePopup{
+position:fixed;
+top:20px;
+left:50%;
+transform:translateX(-50%);
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 10px 30px rgba(0,0,0,.3);
+width:400px;
+display:none;
+z-index:200;
+}
+
+@keyframes fadeIn{
+from{opacity:0; transform:translateY(10px);}
+to{opacity:1; transform:translateY(0);}
+}
+
+/* MOBILE */
+@media(max-width:768px){
+#cartPanel{
+width:100%;
+}
+.login-box{
+width:90%;
+}
 }
 </style>
 </head>
-
 <body>
 
+<!-- LOGIN -->
+<div id="loginScreen">
+<div class="login-box">
+<h2>Sistem Giriş</h2>
+<div class="input-group">
+<input type="email" id="email" placeholder="E-Mail">
+</div>
+<div class="input-group">
+<input type="password" id="password" placeholder="Şifre">
+</div>
+<label><input type="checkbox" id="remember"> Beni Hatırla</label>
+<br><br>
+<button onclick="login()">Giriş Yap</button>
+</div>
+</div>
+
+<!-- ANA SİSTEM -->
+<div id="mainSystem" style="display:none;">
+
 <header>
-Aygun Fiyat Listesi
-<button class="btn" onclick="toggleCart()">Sepet</button>
+<div>Aygun Fiyat Sistemi</div>
+<div id="version"></div>
+<button onclick="toggleCart()">Sepet</button>
 </header>
 
 <div class="container">
-<table id="productTable">
+<table>
+<thead>
+<tr>
+<th>Ürün</th>
+<th>Stok</th>
+<th>D.Kart</th>
+<th>4T AWM</th>
+<th>TekÇekim</th>
+<th>Nakit</th>
+<th>Kod</th>
+<th>Gam</th>
+<th>Marka</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="productBody"></tbody>
+</table>
+</div>
+
+</div>
+
+<!-- SEPET -->
+<div id="cartPanel">
+<div class="cart-header">
+Sepet
+<button onclick="toggleCart()">Kapat</button>
+</div>
+
+<div class="cart-body">
+<input placeholder="Müşteri Adı">
+<input placeholder="Telefon">
+<textarea placeholder="Not"></textarea>
+<table width="100%">
 <thead>
 <tr>
 <th>Ürün</th>
@@ -132,149 +267,139 @@ Aygun Fiyat Listesi
 <th>4T</th>
 <th>Tek</th>
 <th>Nakit</th>
-<th></th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-</div>
-
-<!-- SEPET -->
-<div id="cartPanel">
-<div id="cartHeader">
-Sepet
-<button class="btn" onclick="toggleCart()">Kapat</button>
-</div>
-
-<table class="cart-table" width="100%">
-<thead>
-<tr>
-<th>Ürün</th>
-<th>D.Kart</th>
-<th>4T</th>
-<th>Tek</th>
-<th>Nakit</th>
-<th>İndirim</th>
-<th></th>
+<th>Açıklama</th>
+<th>Sil</th>
 </tr>
 </thead>
 <tbody id="cartBody"></tbody>
-<tfoot>
-<tr class="total-row">
-<td>Toplam</td>
-<td id="tDK">0</td>
-<td id="t4T">0</td>
-<td id="tTek">0</td>
-<td id="tNakit">0</td>
-<td></td>
-<td></td>
-</tr>
-</tfoot>
 </table>
+
+<div class="total-box">
+Alt Toplam: <span id="subtotal">0</span><br>
+İndirim: <input type="number" id="globalDiscount" value="0" onchange="renderCart()"> 
+<div class="discount" id="discountShow"></div>
+Genel Toplam: <span id="grandTotal">0</span>
+</div>
+</div>
+</div>
+
+<!-- DEĞİŞİKLİK POPUP -->
+<div id="changePopup">
+<h4>Son Güncellemeler</h4>
+<div id="changeList"></div>
+<button onclick="closePopup()">X</button>
 </div>
 
 <script>
-let urunler = [];
-let cart = [];
+let urunler=[];
+let cart=[];
 
-/* JSON Yükleme (cache busting) */
-fetch("data/urunler.json?v=" + Date.now())
-.then(res => res.json())
+/* LOGIN */
+function login(){
+if(document.getElementById("remember").checked){
+localStorage.setItem("remember",document.getElementById("email").value);
+}
+document.getElementById("loginScreen").style.display="none";
+document.getElementById("mainSystem").style.display="block";
+loadJSON();
+}
+
+window.onload=function(){
+if(localStorage.getItem("remember")){
+document.getElementById("email").value=localStorage.getItem("remember");
+}
+}
+
+/* JSON LOAD */
+function loadJSON(){
+fetch("data/urunler.json?v="+Date.now())
+.then(r=>r.json())
 .then(json=>{
-    urunler = json.data;
-    renderProducts();
+urunler=json.data;
+document.getElementById("version").innerText="Versiyon: "+json.metadata.v;
+renderProducts();
+checkChanges(json);
 });
+}
 
-/* Ürün Liste */
+/* ÜRÜN LİSTE */
 function renderProducts(){
-    const tbody = document.querySelector("#productTable tbody");
-    tbody.innerHTML="";
-    urunler.forEach(u=>{
-        let tr=document.createElement("tr");
-        tr.innerHTML=`
-            <td class="product-cell">
-                ${u["Ürün"]}
-                ${u["Açıklama"] ? `<div class="product-desc">${u["Açıklama"]}</div>` : ""}
-            </td>
-            <td>${u["Stok"]}</td>
-            <td>${u["Diğer Kartlar"]}</td>
-            <td>${u["4T AWM"]}</td>
-            <td>${u["Tek Çekim"]}</td>
-            <td>${u["Nakit"]}</td>
-            <td><button class="btn" onclick='addToCart(${u["Kod"]})'>Ekle</button></td>
-        `;
-        tbody.appendChild(tr);
-    });
+let body=document.getElementById("productBody");
+body.innerHTML="";
+urunler.forEach(u=>{
+body.innerHTML+=`
+<tr>
+<td>
+<div class="product-title">${u["Ürün"]}</div>
+<div class="product-desc">${u["Açıklama"]||""}</div>
+</td>
+<td>${u["Stok"]}</td>
+<td>${u["Diğer Kartlar"]}</td>
+<td>${u["4T AWM"]}</td>
+<td>${u["Tek Çekim"]}</td>
+<td>${u["Nakit"]}</td>
+<td>${u["Kod"]}</td>
+<td>${u["Ürün Gamı"]}</td>
+<td>${u["Marka"]}</td>
+<td><button onclick='addToCart(${u["Kod"]})'>Ekle</button></td>
+</tr>`;
+});
 }
 
-/* Sepet Aç/Kapat */
+/* SEPET */
 function toggleCart(){
-    const panel=document.getElementById("cartPanel");
-    panel.style.display = panel.style.display==="block" ? "none" : "block";
+let panel=document.getElementById("cartPanel");
+panel.style.display=panel.style.display==="flex"?"none":"flex";
 }
 
-/* Sepete Ekle */
 function addToCart(kod){
-    let urun = urunler.find(u=>u["Kod"]===kod);
-    if(!cart.find(c=>c["Kod"]===kod)){
-        urun.indirim=0;
-        cart.push(urun);
-    }
-    renderCart();
+let u=urunler.find(x=>x["Kod"]===kod);
+if(!cart.find(c=>c["Kod"]===kod)) cart.push(u);
+renderCart();
 }
 
-/* Sepet Render */
 function renderCart(){
-    const body=document.getElementById("cartBody");
-    body.innerHTML="";
-    let tDK=0,t4T=0,tTek=0,tNakit=0;
-
-    cart.forEach(u=>{
-        let dk = u["Diğer Kartlar"] - u.indirim;
-        let t4 = u["4T AWM"] - u.indirim;
-        let tek = u["Tek Çekim"] - u.indirim;
-        let nakit = u["Nakit"] - u.indirim;
-
-        tDK+=dk; t4T+=t4; tTek+=tek; tNakit+=nakit;
-
-        let tr=document.createElement("tr");
-        tr.innerHTML=`
-            <td>
-                ${u["Ürün"]}
-                ${u["Açıklama"] ? `<div class="product-desc">${u["Açıklama"]}</div>` : ""}
-            </td>
-            <td>${dk}</td>
-            <td>${t4}</td>
-            <td>${tek}</td>
-            <td>${nakit}</td>
-            <td>
-                <input type="number" class="discount-input"
-                value="${u.indirim}"
-                onchange="updateDiscount(${u["Kod"]},this.value)">
-                ${u.indirim>0 ? `<div class="discount-value">- ${u.indirim}</div>`:""}
-            </td>
-            <td><button class="btn" onclick="removeCart(${u["Kod"]})">X</button></td>
-        `;
-        body.appendChild(tr);
-    });
-
-    document.getElementById("tDK").innerText=tDK;
-    document.getElementById("t4T").innerText=t4T;
-    document.getElementById("tTek").innerText=tTek;
-    document.getElementById("tNakit").innerText=tNakit;
+let body=document.getElementById("cartBody");
+body.innerHTML="";
+let subtotal=0;
+cart.forEach(u=>{
+subtotal+=u["Nakit"];
+body.innerHTML+=`
+<tr>
+<td>${u["Ürün"]}</td>
+<td>${u["Stok"]}</td>
+<td>${u["Diğer Kartlar"]}</td>
+<td>${u["4T AWM"]}</td>
+<td>${u["Tek Çekim"]}</td>
+<td>${u["Nakit"]}</td>
+<td>${u["Açıklama"]||""}</td>
+<td><button onclick="removeCart(${u["Kod"]})">X</button></td>
+</tr>`;
+});
+let discount=parseInt(document.getElementById("globalDiscount").value)||0;
+let grand=subtotal-discount;
+document.getElementById("subtotal").innerText=subtotal;
+document.getElementById("discountShow").innerText=discount>0?"- "+discount:"";
+document.getElementById("grandTotal").innerText=grand;
 }
 
-/* İndirim Güncelle */
-function updateDiscount(kod,val){
-    let u = cart.find(c=>c["Kod"]===kod);
-    u.indirim=parseInt(val)||0;
-    renderCart();
-}
-
-/* Sepetten Sil */
 function removeCart(kod){
-    cart = cart.filter(c=>c["Kod"]!==kod);
-    renderCart();
+cart=cart.filter(c=>c["Kod"]!==kod);
+renderCart();
+}
+
+/* JSON DEĞİŞİKLİK KONTROL */
+function checkChanges(json){
+let last=localStorage.getItem("lastVersion");
+if(last && last!==json.metadata.v){
+document.getElementById("changePopup").style.display="block";
+document.getElementById("changeList").innerText="Yeni fiyat güncellemesi yapıldı.";
+}
+localStorage.setItem("lastVersion",json.metadata.v);
+}
+
+function closePopup(){
+document.getElementById("changePopup").style.display="none";
 }
 </script>
 
