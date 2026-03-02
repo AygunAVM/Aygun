@@ -1,12 +1,10 @@
 {
-  "name": "Aygün AVM Fiyat Listesi",
+  "name": "Aygün AVM Satış Paneli",
   "short_name": "Aygün AVM",
-  "start_url": "/Aygun/index.html",
-  "scope": "/Aygun/",
+  "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#007bff",
-  "description": "Aygün AVM ürün ve fiyat listesi uygulaması",
   "icons": [
     {
       "src": "icons/icon-192.png",
