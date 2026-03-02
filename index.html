@@ -3,100 +3,280 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aygün AVM | Satış Paneli</title>
+<title>Aygun Fiyat Sistemi</title>
 
-<link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css">
+<style>
+body{
+    font-family: Arial, sans-serif;
+    margin:0;
+    background:#f4f6f9;
+}
+
+header{
+    background:#1f2937;
+    color:white;
+    padding:15px;
+    font-size:20px;
+}
+
+.container{
+    padding:15px;
+}
+
+/* TABLO */
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:white;
+}
+
+th{
+    background:#111827;
+    color:white;
+    padding:10px;
+    position:sticky;
+    top:0;
+    z-index:5;
+}
+
+td{
+    padding:8px;
+    border-bottom:1px solid #eee;
+}
+
+tr:hover{
+    background:#f3f4f6;
+}
+
+/* Ürün hücresi */
+.product-cell{
+    font-weight:bold;
+}
+
+.product-desc{
+    font-size:12px;
+    color:#b91c1c;
+    margin-top:4px;
+}
+
+/* Buton */
+.btn{
+    padding:5px 8px;
+    background:#2563eb;
+    color:white;
+    border:none;
+    cursor:pointer;
+    border-radius:4px;
+}
+
+/* Sepet */
+#cartPanel{
+    position:fixed;
+    right:0;
+    top:0;
+    width:500px;
+    height:100%;
+    background:white;
+    box-shadow:-5px 0 15px rgba(0,0,0,0.1);
+    overflow:auto;
+    display:none;
+    z-index:1000;
+}
+
+#cartHeader{
+    background:#111827;
+    color:white;
+    padding:15px;
+    font-size:18px;
+    position:sticky;
+    top:0;
+    z-index:10;
+}
+
+.cart-table th{
+    position:sticky;
+    top:50px;
+    background:#374151;
+}
+
+.total-row{
+    background:#e5e7eb;
+    font-weight:bold;
+}
+
+.discount-input{
+    width:70px;
+}
+
+.discount-value{
+    color:red;
+    font-weight:bold;
+}
+</style>
 </head>
+
 <body>
 
-<!-- LOGIN -->
-<div id="login-screen" class="login-wrapper">
-  <div class="login-card">
-    <h1 class="logo">aygün<span>®</span></h1>
-
-    <input type="email" id="user-input" placeholder="Email">
-    <input type="password" id="pass-input" placeholder="Şifre">
-
-    <label class="remember">
-      <input type="checkbox" id="remember-me"> Beni Hatırla
-    </label>
-
-    <button class="btn primary" onclick="checkAuth()">Giriş Yap</button>
-    <p id="login-err">Hatalı giriş!</p>
-  </div>
-</div>
-
-<!-- APP -->
-<div id="app-content" style="display:none">
-
-<header class="top-bar">
-  <div class="version" id="v-tag">Yükleniyor...</div>
-  <div class="brand">aygün<span>®</span></div>
-  <div class="cart-btn" onclick="toggleCart()">🛒 <span id="cart-count">0</span></div>
+<header>
+Aygun Fiyat Listesi
+<button class="btn" onclick="toggleCart()">Sepet</button>
 </header>
 
-<div class="search-box">
-  <input id="search" placeholder="Örn: sams buzd" oninput="filterData()">
-</div>
-
-<div class="table-container">
-<table>
+<div class="container">
+<table id="productTable">
 <thead>
 <tr>
-<th>+</th>
 <th>Ürün</th>
 <th>Stok</th>
 <th>D.Kart</th>
-<th>4T AWM</th>
-<th>TekÇekim</th>
+<th>4T</th>
+<th>Tek</th>
 <th>Nakit</th>
-<th>Açıklama</th>
-<th>Kod</th>
-<th class="small">Gam</th>
-<th class="small">Marka</th>
+<th></th>
 </tr>
 </thead>
-<tbody id="product-list"></tbody>
+<tbody></tbody>
 </table>
 </div>
 
-</div>
-
 <!-- SEPET -->
-<div id="cart-modal" class="cart-modal">
-<div class="cart-box">
-
-<div class="cart-header">
-<h3>Teklif Taslağı</h3>
-<button onclick="toggleCart()">✕</button>
+<div id="cartPanel">
+<div id="cartHeader">
+Sepet
+<button class="btn" onclick="toggleCart()">Kapat</button>
 </div>
 
-<div id="cart-items"></div>
-
-<div class="cart-footer">
-
-<div class="discount-row">
-<input type="number" id="discount-input" placeholder="İndirim">
-<select id="discount-type" onchange="applyDiscount()">
-<option value="TRY">₺</option>
-<option value="PERCENT">%</option>
-</select>
+<table class="cart-table" width="100%">
+<thead>
+<tr>
+<th>Ürün</th>
+<th>D.Kart</th>
+<th>4T</th>
+<th>Tek</th>
+<th>Nakit</th>
+<th>İndirim</th>
+<th></th>
+</tr>
+</thead>
+<tbody id="cartBody"></tbody>
+<tfoot>
+<tr class="total-row">
+<td>Toplam</td>
+<td id="tDK">0</td>
+<td id="t4T">0</td>
+<td id="tTek">0</td>
+<td id="tNakit">0</td>
+<td></td>
+<td></td>
+</tr>
+</tfoot>
+</table>
 </div>
 
-<input id="cust-name" placeholder="Müşteri Ad Soyad">
-<input id="cust-phone" maxlength="11" placeholder="05XXXXXXXXX">
-<textarea id="extra-info" placeholder="Not"></textarea>
+<script>
+let urunler = [];
+let cart = [];
 
-<div class="cart-actions">
-<button class="btn whatsapp" onclick="finalizeProposal()">WhatsApp</button>
-<button class="btn danger" onclick="clearBasket()">Temizle</button>
-</div>
+/* JSON Yükleme (cache busting) */
+fetch("data/urunler.json?v=" + Date.now())
+.then(res => res.json())
+.then(json=>{
+    urunler = json.data;
+    renderProducts();
+});
 
-</div>
-</div>
-</div>
+/* Ürün Liste */
+function renderProducts(){
+    const tbody = document.querySelector("#productTable tbody");
+    tbody.innerHTML="";
+    urunler.forEach(u=>{
+        let tr=document.createElement("tr");
+        tr.innerHTML=`
+            <td class="product-cell">
+                ${u["Ürün"]}
+                ${u["Açıklama"] ? `<div class="product-desc">${u["Açıklama"]}</div>` : ""}
+            </td>
+            <td>${u["Stok"]}</td>
+            <td>${u["Diğer Kartlar"]}</td>
+            <td>${u["4T AWM"]}</td>
+            <td>${u["Tek Çekim"]}</td>
+            <td>${u["Nakit"]}</td>
+            <td><button class="btn" onclick='addToCart(${u["Kod"]})'>Ekle</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
 
-<script src="app.js"></script>
+/* Sepet Aç/Kapat */
+function toggleCart(){
+    const panel=document.getElementById("cartPanel");
+    panel.style.display = panel.style.display==="block" ? "none" : "block";
+}
+
+/* Sepete Ekle */
+function addToCart(kod){
+    let urun = urunler.find(u=>u["Kod"]===kod);
+    if(!cart.find(c=>c["Kod"]===kod)){
+        urun.indirim=0;
+        cart.push(urun);
+    }
+    renderCart();
+}
+
+/* Sepet Render */
+function renderCart(){
+    const body=document.getElementById("cartBody");
+    body.innerHTML="";
+    let tDK=0,t4T=0,tTek=0,tNakit=0;
+
+    cart.forEach(u=>{
+        let dk = u["Diğer Kartlar"] - u.indirim;
+        let t4 = u["4T AWM"] - u.indirim;
+        let tek = u["Tek Çekim"] - u.indirim;
+        let nakit = u["Nakit"] - u.indirim;
+
+        tDK+=dk; t4T+=t4; tTek+=tek; tNakit+=nakit;
+
+        let tr=document.createElement("tr");
+        tr.innerHTML=`
+            <td>
+                ${u["Ürün"]}
+                ${u["Açıklama"] ? `<div class="product-desc">${u["Açıklama"]}</div>` : ""}
+            </td>
+            <td>${dk}</td>
+            <td>${t4}</td>
+            <td>${tek}</td>
+            <td>${nakit}</td>
+            <td>
+                <input type="number" class="discount-input"
+                value="${u.indirim}"
+                onchange="updateDiscount(${u["Kod"]},this.value)">
+                ${u.indirim>0 ? `<div class="discount-value">- ${u.indirim}</div>`:""}
+            </td>
+            <td><button class="btn" onclick="removeCart(${u["Kod"]})">X</button></td>
+        `;
+        body.appendChild(tr);
+    });
+
+    document.getElementById("tDK").innerText=tDK;
+    document.getElementById("t4T").innerText=t4T;
+    document.getElementById("tTek").innerText=tTek;
+    document.getElementById("tNakit").innerText=tNakit;
+}
+
+/* İndirim Güncelle */
+function updateDiscount(kod,val){
+    let u = cart.find(c=>c["Kod"]===kod);
+    u.indirim=parseInt(val)||0;
+    renderCart();
+}
+
+/* Sepetten Sil */
+function removeCart(kod){
+    cart = cart.filter(c=>c["Kod"]!==kod);
+    renderCart();
+}
+</script>
+
 </body>
 </html>
