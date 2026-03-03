@@ -10,139 +10,86 @@
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════════════
-     GİRİŞ EKRANI
-═══════════════════════════════════════════════ -->
+<!-- CHANGE TOAST CONTAINER -->
+<div id="change-toast"></div>
+
+<!-- GİRİŞ EKRANI -->
 <div id="login-screen" style="display:flex;">
   <div class="login-box">
     <span class="brand-logo">aygün<span>®</span></span>
     <p class="login-subtitle">Satış Paneli</p>
-
     <div class="login-field">
       <span class="login-field-icon">✉</span>
       <input type="email" id="user-input" placeholder="E-mail adresiniz" autocomplete="email">
     </div>
-
     <div class="login-field">
       <span class="login-field-icon">🔒</span>
       <input type="password" id="pass-input" placeholder="Şifreniz" autocomplete="current-password">
     </div>
-
     <label class="remember-label">
       <input type="checkbox" id="remember-me"> Beni Hatırla
     </label>
-
     <button class="btn-login haptic-btn" onclick="checkAuth()">Giriş Yap →</button>
     <p id="login-err" style="display:none;"></p>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════════════
-     ANA UYGULAMA
-═══════════════════════════════════════════════ -->
+<!-- ANA UYGULAMA -->
 <div id="app-content" style="display:none;">
-
-  <!-- STICKY HEADER -->
   <div class="sticky-header">
     <header>
       <div class="brand-area">
         <div class="header-logo">aygün<span>®</span></div>
         <span id="v-tag">—</span>
       </div>
-      <div class="cart-trigger haptic-btn" onclick="toggleCart()">
-        <span class="cart-icon">🛒</span>
-        SEPET&nbsp;<span id="cart-count">0</span>
+      <div class="header-right">
+        <button class="admin-btn haptic-btn" id="admin-btn" onclick="openAdmin()" style="display:none;" title="Admin Paneli">📊</button>
+        <div class="cart-trigger haptic-btn" onclick="toggleCart()">
+          🛒 SEPET <span id="cart-count">0</span>
+        </div>
       </div>
     </header>
     <div class="search-container">
-      <input type="search"
-             id="search"
-             placeholder="Ürün ara… (örn: sam buzd)"
-             oninput="filterData()"
-             autocomplete="off">
+      <input type="search" id="search" placeholder="Ürün ara… (örn: sam buzd)" oninput="filterData()" autocomplete="off">
     </div>
   </div>
 
-  <!-- TABLO -->
   <main>
     <div class="table-wrapper">
       <table id="product-table">
         <thead>
           <tr>
-            <th>Ekle</th>
-            <th>Ürün</th>
-            <th>Stok</th>
-            <th>D.Kart</th>
-            <th>4T AWM</th>
-            <th>Tek Çekim</th>
-            <th>Nakit</th>
-            <th>Kod</th>
-            <th>Gam</th>
-            <th>Marka</th>
+            <th>Ekle</th><th>Ürün</th><th>Stok</th>
+            <th>D.Kart</th><th>4T AWM</th><th>Tek Çekim</th><th>Nakit</th>
+            <th>Kod</th><th>Gam</th><th>Marka</th>
           </tr>
         </thead>
         <tbody id="product-list"></tbody>
       </table>
     </div>
   </main>
+</div>
 
-</div><!-- /app-content -->
-
-
-<!-- ═══════════════════════════════════════════════
-     SEPET MODAL
-═══════════════════════════════════════════════ -->
+<!-- SEPET MODAL -->
 <div id="cart-modal" class="modal-overlay">
   <div class="cart-modal-content">
-
-    <!-- Header -->
     <div class="modal-header">
-      <div style="display:flex; align-items:center; gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
         <h3>🛒 Teklif Taslağı</h3>
         <span class="modal-badge" id="cart-modal-count"></span>
       </div>
       <button class="close-modal-btn haptic-btn" onclick="toggleCart()">✕</button>
     </div>
-
-    <!-- Tablo -->
     <div class="cart-table-area" id="cart-table-area">
-      <div class="empty-cart">
-        <span class="empty-cart-icon">🛒</span>
-        Sepetiniz boş
-      </div>
+      <div class="empty-cart"><span class="empty-cart-icon">🛒</span>Sepetiniz boş</div>
     </div>
-
-    <!-- Footer -->
     <div class="cart-footer">
-
-      <!-- Fiyat tipi seçimi -->
-      <div style="margin-bottom:10px;">
-        <div style="font-size:0.67rem; font-weight:700; color:#94a3b8; letter-spacing:0.07em; text-transform:uppercase; margin-bottom:7px;">
-          WhatsApp'a Gidecek Fiyat Tipi
-        </div>
-        <div class="price-type-row">
-          <label class="price-type-chip" data-type="dk">
-            <input type="checkbox" onchange="togglePriceType('dk',this)"> D.Kart
-          </label>
-          <label class="price-type-chip" data-type="awm">
-            <input type="checkbox" onchange="togglePriceType('awm',this)"> 4T AWM
-          </label>
-          <label class="price-type-chip" data-type="tek">
-            <input type="checkbox" onchange="togglePriceType('tek',this)"> Tek Çekim
-          </label>
-          <label class="price-type-chip" data-type="nakit">
-            <input type="checkbox" onchange="togglePriceType('nakit',this)"> Nakit
-          </label>
-        </div>
-      </div>
-
-      <!-- İndirim -->
-      <div class="discount-row-inputs">
-        <div class="footer-field">
+      <div class="cart-footer-row">
+        <div class="footer-field" style="flex:1">
           <label>İndirim</label>
           <input type="number" id="discount-input" placeholder="0" oninput="applyDiscount()">
         </div>
-        <div class="footer-field">
+        <div class="footer-field" style="flex:0 0 70px">
           <label>&nbsp;</label>
           <select id="discount-type" onchange="applyDiscount()">
             <option value="TRY">₺</option>
@@ -150,9 +97,34 @@
           </select>
         </div>
       </div>
+      <div class="final-actions">
+        <button class="btn-wa-detail haptic-btn" onclick="openWaModal()">
+          📲 WhatsApp Detayları
+        </button>
+        <button class="btn-clear-all haptic-btn" onclick="clearBasket()">🗑</button>
+      </div>
+    </div>
+  </div>
+</div>
 
-      <!-- Müşteri bilgileri -->
-      <div class="cart-footer-grid">
+<!-- WA DETAY MODAL -->
+<div id="wa-modal" class="modal-overlay">
+  <div class="wa-modal-content">
+    <div class="modal-header">
+      <h3>📲 WhatsApp Teklifi</h3>
+      <button class="close-modal-btn haptic-btn" onclick="closeWaModal()">✕</button>
+    </div>
+    <div class="wa-modal-body">
+      <div style="font-size:.65rem;font-weight:700;color:#94a3b8;letter-spacing:.07em;text-transform:uppercase;margin-bottom:8px;">
+        Gidecek Fiyat Tipi
+      </div>
+      <div class="price-type-row" style="margin-bottom:14px;">
+        <label class="price-type-chip checked" data-type="dk" onclick="togglePriceType('dk')"><input type="checkbox" checked>D.Kart</label>
+        <label class="price-type-chip" data-type="awm" onclick="togglePriceType('awm')"><input type="checkbox">4T AWM</label>
+        <label class="price-type-chip" data-type="tek" onclick="togglePriceType('tek')"><input type="checkbox">Tek Çekim</label>
+        <label class="price-type-chip" data-type="nakit" onclick="togglePriceType('nakit')"><input type="checkbox">Nakit</label>
+      </div>
+      <div class="wa-grid">
         <div class="footer-field">
           <label>Müşteri Adı</label>
           <input type="text" id="cust-name" placeholder="Ad Soyad">
@@ -161,71 +133,114 @@
           <label>Telefon</label>
           <input type="tel" id="cust-phone" placeholder="05XXXXXXXXX" maxlength="11">
         </div>
+        <div class="footer-field full">
+          <label>Ekstra Not</label>
+          <textarea id="extra-info" placeholder="Ek bilgi, özel koşullar..."></textarea>
+        </div>
       </div>
-
-      <div class="footer-field" style="margin-bottom:12px;">
-        <label>Ekstra Not</label>
-        <textarea id="extra-info" placeholder="Ek bilgi, özel koşullar..."></textarea>
-      </div>
-
-      <!-- Butonlar -->
-      <div class="final-actions">
-        <button class="btn-whatsapp haptic-btn" onclick="finalizeProposal()">
-          <span>📲</span> WhatsApp'a Gönder
-        </button>
-        <button class="btn-clear-all haptic-btn" onclick="clearBasket()">
-          🗑 Temizle
-        </button>
-      </div>
-
-    </div><!-- /cart-footer -->
+      <button class="wa-send-btn haptic-btn" onclick="finalizeProposal()">
+        <span>📲</span> WhatsApp'a Gönder
+      </button>
+    </div>
   </div>
 </div>
 
-
-<!-- ═══════════════════════════════════════════════
-     DEĞİŞİKLİK POPUP
-═══════════════════════════════════════════════ -->
-<div id="change-popup" class="modal-overlay" style="align-items:center; justify-content:center;">
+<!-- DEĞİŞİKLİK POPUP -->
+<div id="change-popup" class="modal-overlay" style="align-items:center;justify-content:center;">
   <div class="change-modal-content">
     <div class="change-header">
-      <h3>🔔 Fiyat & Stok Değişiklikleri</h3>
-      <button class="close-modal-btn haptic-btn" onclick="closeChangePopup()" style="background:rgba(255,255,255,0.20);">✕</button>
+      <h3>🔔 Fiyat &amp; Stok Değişiklikleri</h3>
+      <button class="close-modal-btn haptic-btn" onclick="closeChangePopup()" style="background:rgba(255,255,255,.20);">✕</button>
     </div>
     <div id="change-list"></div>
   </div>
 </div>
 
+<!-- ADMİN MODAL -->
+<div id="admin-modal" class="admin-modal-overlay">
+  <div class="admin-modal-content">
+    <div class="admin-header">
+      <div class="admin-header-info">
+        <h3>📊 Admin Paneli</h3>
+        <p>Kullanıcı &amp; satış analitikleri</p>
+      </div>
+      <button class="close-modal-btn haptic-btn" onclick="closeAdmin()">✕</button>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" data-tab="overview" onclick="switchAdminTab('overview')">Özet</button>
+      <button class="admin-tab" data-tab="users" onclick="switchAdminTab('users')">Kullanıcılar</button>
+      <button class="admin-tab" data-tab="products" onclick="switchAdminTab('products')">Ürün Popülaritesi</button>
+      <button class="admin-tab" data-tab="daily" onclick="switchAdminTab('daily')">Günlük</button>
+    </div>
+    <div class="admin-body">
+
+      <!-- ÖZET -->
+      <div class="admin-tab-content active" id="tab-overview">
+        <div class="admin-stats-grid">
+          <div class="stat-card">
+            <span class="stat-card-icon">🔑</span>
+            <div class="stat-card-val" id="stat-logins">—</div>
+            <div class="stat-card-lbl">Toplam Giriş</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-icon">📲</span>
+            <div class="stat-card-val" id="stat-proposals">—</div>
+            <div class="stat-card-lbl">WA Teklifleri</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-icon">🛒</span>
+            <div class="stat-card-val" id="stat-adds">—</div>
+            <div class="stat-card-lbl">Sepet Ekleme</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-card-icon">👥</span>
+            <div class="stat-card-val" id="stat-users">—</div>
+            <div class="stat-card-lbl">Aktif Kullanıcı</div>
+          </div>
+        </div>
+        <div class="admin-section">
+          <div class="admin-section-header">📅 Son 7 Gün Giriş</div>
+          <div class="daily-chart">
+            <div class="chart-bars" id="admin-daily-chart"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KULLANICILAR -->
+      <div class="admin-tab-content" id="tab-users">
+        <div class="admin-section">
+          <div class="admin-section-header">👥 Kullanıcı Aktivitesi</div>
+          <div id="admin-user-list"></div>
+        </div>
+      </div>
+
+      <!-- ÜRÜN POPÜLARİTESİ -->
+      <div class="admin-tab-content" id="tab-products">
+        <div class="admin-section">
+          <div class="admin-section-header">🏆 En Çok Sepete Eklenen</div>
+          <div id="admin-product-list"></div>
+        </div>
+      </div>
+
+      <!-- GÜNLÜK -->
+      <div class="admin-tab-content" id="tab-daily">
+        <div class="admin-section">
+          <div class="admin-section-header">📅 Günlük Grafik</div>
+          <div class="daily-chart">
+            <div class="chart-bars" id="admin-daily-chart2"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
 
 <script src="app.js"></script>
 <script>
-  // Fiyat tipi toggle (checkbox yerine label click ile)
-  function togglePriceType(type, checkbox) {
-    const chip = checkbox.closest('.price-type-chip');
-    if (checkbox.checked) {
-      chip.classList.add('checked');
-      if (!selectedPriceTypes.includes(type)) selectedPriceTypes.push(type);
-    } else {
-      chip.classList.remove('checked');
-      selectedPriceTypes = selectedPriceTypes.filter(x => x !== type);
-    }
-  }
-
-  // Cart modal ürün sayısı badge güncelle
-  const origUpdateCartUI = updateCartUI;
-  updateCartUI = function() {
-    origUpdateCartUI();
-    const badge = document.getElementById('cart-modal-count');
-    if (badge) badge.textContent = basket.length + ' ürün';
-  };
-
-  // Service Worker kayıt
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
-    });
+  if('serviceWorker' in navigator){
+    window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
   }
 </script>
-
 </body>
 </html>
