@@ -1535,9 +1535,9 @@ function _doPrintTeklif(p) {
     <p class="footer-text">Teklifimize konu ürünlerin fiyatlarını değerlendirmelerinize sunar, ihtiyaç duyacağınız her konuda memnuniyetle destek vermeye hazır olduğumuzu belirtir; çalışmalarınızda kolaylıklar dileriz.</p>
     <div class="footer-bottom">
       <div class="sig-box"><div class="sig-lbl">Satıcı İmzası</div></div>
-      <div class="sig-box"><div class="sig-lbl">Müşteri İmzası / Kaşe</div></div>
+      <div class="sig-box"><div class="sig-lbl">Müşteri İmzası</div></div>
     </div>
-    <p class="footer-brand">Aygün AVM · aygün.com.tr</p>
+    <p class="footer-brand">Aygün AVM</p>
   </div>
 </div>
 <script>window.addEventListener('load',()=>{setTimeout(()=>window.print(),400);});<\/script>
