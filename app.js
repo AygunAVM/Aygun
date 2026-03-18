@@ -2226,7 +2226,7 @@ function _doUpdateChangeBtn() {
     btn.style.opacity = canClose ? '1' : '0.45';
     btn.style.cursor  = canClose ? 'pointer' : 'not-allowed';
     if(canClose) {
-      btn.textContent = '✓ Anladım, Kapat';
+      btn.textContent = 'Satışa hazırım';
     } else if(!lowConfirmed && mandatoryLeft > 0) {
       btn.textContent = '↑ Önce bilgi bölümünü onaylayın';
     } else if(!lowConfirmed) {
