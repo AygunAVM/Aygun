@@ -205,9 +205,9 @@ main { padding:8px 0 120px; }
 #product-table td { padding:7px 10px; font-size:.78rem; vertical-align:middle; }
 /* ── PREMİUM PRİM BUTONU ─────────────────────────────────────── */
 .add-btn-modern {
-  /* Sabit boyut */
-  width: 34px;
-  height: 26px;
+  /* Sabit boyut — 1 kademe büyüdü */
+  width: 36px;
+  height: 28px;
   flex-shrink: 0;
 
   /* Temel görünüm */
@@ -245,7 +245,7 @@ main { padding:8px 0 120px; }
 
 /* Prim rakamı */
 .add-btn-modern .prim-hint {
-  font-size: .54rem;
+  font-size: .56rem;
   font-weight: 800;
   letter-spacing: -0.2px;
   line-height: 1;
@@ -279,10 +279,10 @@ main { padding:8px 0 120px; }
   background: #991b1b;
   box-shadow: 0 2px 8px rgba(153,27,27,0.4);
 }
-/* Stok 4-10 — lacivert, uyarı (kurumsal) */
+/* Stok 4-10 — koyu gri, şık ve nötr (mavi kaldırıldı) */
 .add-btn-modern.stok-orta {
-  background: #1e40af;
-  box-shadow: 0 2px 8px rgba(30,64,175,0.4);
+  background: #475569;
+  box-shadow: 0 2px 8px rgba(71,85,105,0.4);
 }
 /* Stok 11+ — zümrüt yeşil, rahat (çekici) */
 .add-btn-modern.stok-bol {
