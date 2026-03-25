@@ -553,7 +553,7 @@ function _showPrimAnimation(primVal) {
   const el = document.createElement('div');
   el.className = 'prim-fly';
   const pLbl = primVal>=1000 ? (primVal/1000).toFixed(primVal%1000===0?0:1)+'K' : String(Math.round(primVal));
-  el.innerHTML = '<span style="font-size:1.2rem;">✨</span> +' + pLbl + ' <span style="font-weight:600;">p.</span> <span style="font-size:1.2rem;">🪙</span>';
+  el.innerHTML = '<span style="font-size:1.2rem;">✨</span> +' + pLbl + ' <span style="font-weight:600;">Puan</span> <span style="font-size:1.2rem;">🪙</span>';
   el.style.cssText = 'position:fixed;top:52%;left:50%;z-index:99999;pointer-events:none;' +
     'display:flex;align-items:center;gap:12px;' +
     'background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);' +
