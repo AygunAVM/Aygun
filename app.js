@@ -773,6 +773,9 @@ function addToBasket(idx) {
   });
   
   logAnalytics('addToBasket', p[urunKey] || '');
+  // Sepet loglama
+  if (basket.length === 1) logSepet('session_basla', 0, null); // ilk ürün = yeni session
+  logSepet('ekle', parseFloat(p.Nakit)||0, p[urunKey]||'');
   saveBasket();
 
   // --- YENİ: Sepeti live_baskets'e kaydet ---
@@ -850,13 +853,23 @@ function saveBasket() {
     }, {merge: true}).catch(() => {});
   }
 }
-function removeFromBasket(i) { haptic(12); basket.splice(i,1); saveBasket(); }
+function removeFromBasket(i) {
+  haptic(12);
+  const removed = basket[i];
+  logSepet('cikar', removed?.nakit||0, removed?.urun||null);
+  basket.splice(i,1);
+  saveBasket();
+}
 async function clearBasket() {
   haptic(30); if(!(await ayDanger('Sepeti temizle?'))) return;
+  // Sepet doluysa terk logu
+  if(basket.length > 0) {
+    const toplamTutar = basket.reduce((s,i)=>s+(i.nakit-(i.itemDisc||0)),0);
+    logSepet('terk', toplamTutar, null);
+  }
   basket=[]; discountAmount=0;
   const di=document.getElementById('discount-input'); if(di) di.value='';
   saveBasket();
-  // live_baskets'ten de sil (admin sepetler panelinde görünmesin)
   if(currentUser && _db) {
     deleteDoc(doc(_db, 'live_baskets', currentUser.Email)).catch(()=>{});
   }
@@ -1627,11 +1640,11 @@ function renderProposals(container, forceAll, searchQ) {
 
   // Admin tüm teklifleri görür; satis: kendi + herkese açık
   // 7 günden eski kapatılmış teklifleri arşive taşı
-  const archiveCutoff = new Date(); archiveCutoff.setDate(archiveCutoff.getDate()-7);
-  const isArchived = p => p.archivedAt && new Date(p.archivedAt) < archiveCutoff;
+  // archivedAt set edilmiş teklifler ANINDA arşive geçer — listede görünmez
+  const isArchived = p => !!p.archivedAt;
 
   let myProps = isAdmin()
-    ? proposals.filter(p => !isArchived(p))          // admin: arşiv hariç tümü
+    ? proposals.filter(p => !isArchived(p))
     : proposals.filter(p =>
         !isArchived(p) &&
         (p.user === (currentUser?.Email||'') ||
@@ -3095,6 +3108,25 @@ function showChangeToasts(changes) {
   });
 }
 
+
+// ─── SEPET LOGLAMA (Firebase sepet_loglari) ─────────────────────
+// Firebase ücretsiz plan uyumlu: günde ~500 yazma, koleksiyon hafif tutulur
+async function logSepet(islem, tutar, urunAdi) {
+  if (!currentUser || !_db) return;
+  try {
+    await addDoc(collection(_db, 'sepet_loglari'), {
+      personelId:  currentUser.Email,
+      personelAd:  currentUser.Ad || currentUser.Email.split('@')[0],
+      ts:          serverTimestamp(),
+      islem,        // 'ekle' | 'cikar' | 'terk' | 'session_basla'
+      tutar:        tutar || 0,
+      urun:         urunAdi || null,
+      sepetAdet:    basket.length,
+      tarih:        new Date().toISOString().split('T')[0]
+    });
+  } catch(e) { console.warn('logSepet:', e); }
+}
+
 function logAnalytics(action, detail) {
   if(!currentUser) return;
   const today = new Date().toISOString().split('T')[0];
@@ -3168,6 +3200,211 @@ async function loadAnalyticsData() {
   return local;
 }
 
+
+// ─── SEPET ANALİZ ────────────────────────────────────────────────
+let _ayHourlyChart = null, _ayDailyChart = null;
+
+async function loadSepetAnaliz() {
+  const cont = document.getElementById('analiz-konteynir');
+  if(!cont) return;
+  cont.style.display = 'block';
+  cont.innerHTML = '<div class="admin-empty" style="padding:24px">⏳ Veriler yükleniyor…</div>';
+
+  try {
+    const q = query(collection(_db, 'sepet_loglari'), orderBy('ts', 'desc'));
+    const snap = await getDocs(q);
+    const logs = [];
+    snap.forEach(d => logs.push(d.data()));
+
+    if(!logs.length) {
+      cont.innerHTML = '<div class="admin-empty">📭 Henüz sepet logu yok.<br><span style="font-size:.72rem;color:var(--text-3)">Ürün sepete ekledikçe burada analiz görünecek.</span></div>';
+      return;
+    }
+
+    // Grafik canvas'larını yeniden oluştur (destroy sorununu önle)
+    cont.innerHTML = `
+      <div style="padding:8px 0 14px">
+        <canvas id="ayHourlyChart" style="max-width:100%;height:180px"></canvas>
+      </div>
+      <div style="padding:0 0 14px">
+        <canvas id="ayDailyChart" style="max-width:100%;height:180px"></canvas>
+      </div>
+      <div id="analiz-ozet"></div>
+    `;
+
+    const hourly   = _analGetHourly(logs);
+    const daily    = _analGetDaily(logs);
+    const personel = _analGetPersonel(logs);
+    const abandon  = _analGetAbandon(logs);
+
+    _analRenderHourly(hourly);
+    _analRenderDaily(daily);
+    _analRenderOzet(hourly, daily, personel, abandon, logs.length);
+
+  } catch(e) {
+    console.error('loadSepetAnaliz:', e);
+    cont.innerHTML = `<div class="admin-empty" style="color:#dc2626">⚠️ Veri çekilemedi: ${e.message}</div>`;
+  }
+}
+
+function _analGetHourly(logs) {
+  const h = Array(24).fill(0);
+  logs.forEach(l => {
+    if(!l.ts || l.islem === 'terk') return;
+    const hour = l.ts.toDate ? l.ts.toDate().getHours() : new Date(l.ts).getHours();
+    h[hour]++;
+  });
+  return h;
+}
+
+function _analGetDaily(logs) {
+  const days = Array(7).fill(0);
+  const names = ['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'];
+  logs.forEach(l => {
+    if(!l.ts || l.islem === 'terk') return;
+    const d = l.ts.toDate ? l.ts.toDate().getDay() : new Date(l.ts).getDay();
+    days[d]++;
+  });
+  return { days, names };
+}
+
+function _analGetPersonel(logs) {
+  const map = {};
+  logs.forEach(l => {
+    if(!l.personelId) return;
+    if(!map[l.personelId]) map[l.personelId] = { ad: l.personelAd||l.personelId.split('@')[0], ekle:0, cikar:0, terk:0 };
+    if(l.islem==='ekle')  map[l.personelId].ekle++;
+    if(l.islem==='cikar') map[l.personelId].cikar++;
+    if(l.islem==='terk')  map[l.personelId].terk++;
+  });
+  return map;
+}
+
+function _analGetAbandon(logs) {
+  let ekle = 0, terk = 0;
+  logs.forEach(l => {
+    if(l.islem==='ekle') ekle++;
+    if(l.islem==='terk') terk++;
+  });
+  return ekle === 0 ? '0.0' : ((terk/ekle)*100).toFixed(1);
+}
+
+function _analRenderHourly(hours) {
+  const ctx = document.getElementById('ayHourlyChart')?.getContext('2d');
+  if(!ctx) return;
+  if(_ayHourlyChart) { _ayHourlyChart.destroy(); _ayHourlyChart=null; }
+  _ayHourlyChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [...Array(24).keys()].map(h=>(h<10?'0':'')+h+':00'),
+      datasets: [{
+        label: 'Sepet Hareketi',
+        data: hours,
+        backgroundColor: hours.map(v=>v===Math.max(...hours)?'rgba(208,31,46,.85)':'rgba(208,31,46,.35)'),
+        borderRadius: 5,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        title:{display:true,text:'Saatlik Sepet Hareketi',font:{size:12,weight:'600'},color:'#1e293b'}
+      },
+      scales:{
+        y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'#f1f5f9'}},
+        x:{ticks:{font:{size:9},maxRotation:45},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function _analRenderDaily(daily) {
+  const ctx = document.getElementById('ayDailyChart')?.getContext('2d');
+  if(!ctx) return;
+  if(_ayDailyChart) { _ayDailyChart.destroy(); _ayDailyChart=null; }
+  _ayDailyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: daily.names,
+      datasets:[{
+        label:'Haftalık Sepet',
+        data: daily.days,
+        borderColor:'#D01F2E',
+        backgroundColor:'rgba(208,31,46,.08)',
+        fill:true, tension:0.35,
+        pointRadius:5, pointBackgroundColor:'#D01F2E',
+        pointBorderColor:'#fff', pointBorderWidth:2
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        title:{display:true,text:'Gün Bazlı Sepet Hareketi',font:{size:12,weight:'600'},color:'#1e293b'}
+      },
+      scales:{
+        y:{beginAtZero:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'#f1f5f9'}},
+        x:{ticks:{font:{size:11}},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function _analRenderOzet(hourly, daily, personel, abandon, toplam) {
+  const enAktifSaat = hourly.indexOf(Math.max(...hourly));
+  const enYogunGun  = daily.names[daily.days.indexOf(Math.max(...daily.days))];
+
+  // En iyi personel
+  let enIyi = {ad:'—', ekle:0};
+  Object.values(personel).forEach(d=>{ if(d.ekle>enIyi.ekle) enIyi={ad:d.ad,ekle:d.ekle}; });
+
+  // Personel satırları
+  const personelRows = Object.entries(personel)
+    .sort((a,b)=>b[1].ekle-a[1].ekle)
+    .map(([,d])=>{
+      const terkOran = d.ekle===0 ? 0 : ((d.terk/d.ekle)*100).toFixed(1);
+      const color = terkOran>30 ? '#dc2626' : terkOran>15 ? '#d97706' : '#16a34a';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:.76rem;">
+        <span style="font-weight:700;min-width:80px">${d.ad}</span>
+        <span style="color:#475569">📦 <b>${d.ekle}</b> ekle&nbsp;&nbsp;↩ <b>${d.cikar}</b> çıkar</span>
+        <span style="font-weight:700;color:${color}">${terkOran}% terk</span>
+      </div>`;
+    }).join('');
+
+  const ozet = document.getElementById('analiz-ozet');
+  if(!ozet) return;
+  ozet.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div class="stat-card">
+        <span class="stat-card-icon">⏰</span>
+        <div class="stat-card-val" style="font-size:1.1rem">${(enAktifSaat<10?'0':'')+enAktifSaat}:00</div>
+        <div class="stat-card-lbl">En Aktif Saat</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card-icon">📅</span>
+        <div class="stat-card-val" style="font-size:1.1rem">${enYogunGun}</div>
+        <div class="stat-card-lbl">En Yoğun Gün</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card-icon">🛒</span>
+        <div class="stat-card-val" style="font-size:1.1rem;color:${parseFloat(abandon)>30?'#dc2626':'var(--red)'}">${abandon}%</div>
+        <div class="stat-card-lbl">Terk Oranı</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-card-icon">🏆</span>
+        <div class="stat-card-val" style="font-size:.95rem">${enIyi.ad}</div>
+        <div class="stat-card-lbl">Şampiyon (${enIyi.ekle} ekle)</div>
+      </div>
+    </div>
+    <div class="admin-section-header" style="margin-bottom:8px">👤 Personel Sepet Performansı</div>
+    ${personelRows || '<div class="admin-empty">Personel verisi yok</div>'}
+    <div style="font-size:.68rem;color:var(--text-3);text-align:center;margin-top:10px;padding-top:8px;border-top:1px solid #f1f5f9">
+      📊 Toplam ${toplam} kayıt analiz edildi
+    </div>
+  `;
+}
+
 // ─── ADMİN ──────────────────────────────────────────────────────
 async function openAdmin() {
   // Header'a kullanıcı adını yaz
@@ -3200,6 +3437,7 @@ function switchAdminTab(tab) {
   if(tab==='sepetler')  { renderSepetDetay(); }
   if(tab==='personel')  { renderAdminUsers(); }
   if(tab==='arsiv')     { renderArchivedProposals(); }
+  if(tab==='analiz')    { loadSepetAnaliz(); }
   if(tab==='products')  {
     renderAdminProducts();
     // Uyuyan stok — allProducts her zaman hazır olmalı (loadData çalışmış)
@@ -3640,13 +3878,12 @@ function _startSessionListener() {
 function renderArchivedProposals() {
   const el = document.getElementById('admin-arsiv-list');
   if(!el) { return; }
-  const archiveCutoff = new Date(); archiveCutoff.setDate(archiveCutoff.getDate()-7);
-  const archived = proposals.filter(p =>
-    p.archivedAt && new Date(p.archivedAt) < archiveCutoff
-  ).sort((a,b)=>new Date(b.archivedAt)-new Date(a.archivedAt));
+  const archived = proposals
+    .filter(p => !!p.archivedAt)
+    .sort((a,b)=>new Date(b.archivedAt)-new Date(a.archivedAt));
 
   if(!archived.length) {
-    el.innerHTML = '<div class="admin-empty">📦 Arşiv boş<br><span style="font-size:.72rem;color:var(--text-3)">İptal, süresi dolan ve satışa dönen teklifler 7 gün sonra buraya taşınır</span></div>';
+    el.innerHTML = '<div class="admin-empty">📦 Arşiv boş<br><span style="font-size:.72rem;color:var(--text-3)">İptal, satışa dönen ve süresi dolan teklifler burada listelenir</span></div>';
     return;
   }
   const statusLabel = {bekliyor:'⏳',satisDondu:'✅',iptal:'✕',sureDoldu:'⌛'};
@@ -4402,4 +4639,5 @@ Object.assign(window, {
   openMessages: ()=>{},
   addToBasketPrim, openSiparisNotSafe, _initStockFilterBtn,
   renderArchivedProposals,
+  loadSepetAnaliz,
 });
