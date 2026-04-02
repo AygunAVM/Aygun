@@ -73,6 +73,7 @@ if (adminOpen) {
   if (activeTab === 'overview')  renderAdminPanel();
   if (activeTab === 'sepetler')  renderSepetDetay();
   if (activeTab === 'personel')  renderAdminUsers();
+  if (activeTab === 'analiz')    { loadFunnelAnaliz(90, false); }  // ✅ 5-sekme
 }
 updateProposalBadge(); // Admin paneli kapalı olsa bile badge güncel kalsın
     },
@@ -621,12 +622,18 @@ async function fetchLiveBasket() {
         if (data.sessionData) {
           _sessionData = { 
             ...data.sessionData, 
-            blurUrunler: data.sessionData.blurUrunler || {}  // ✅ YENİ: blurUrunler geri yüklendi
+            blurUrunler: data.sessionData.blurUrunler || {}
           };
         }
         updateCartUI();
         await logSessionResult('kacti', 'Hareketsizlik (Arka Plan)');
-        _doClearBasket();
+        
+        // ✅ DÜZELTİLMİŞ: _doClearBasket yerine window.clearBasket çağrısı
+        if (typeof window.clearBasket === 'function') {
+          window.clearBasket();
+        } else if (typeof _doClearBasket === 'function') {
+          _doClearBasket();
+        }
         return;
       }
     }
@@ -638,7 +645,7 @@ async function fetchLiveBasket() {
         _sessionData = {
           searches:       data.sessionData.searches       || [],
           revealedPrices: data.sessionData.revealedPrices || [],
-          blurUrunler:    data.sessionData.blurUrunler    || {},  // ✅ YENİ
+          blurUrunler:    data.sessionData.blurUrunler    || {},
           startTime:      data.sessionData.startTime      || Date.now()
         };
       }
@@ -652,7 +659,9 @@ async function fetchLiveBasket() {
 
 function isAdmin() {
   if (!currentUser) return false;
-  return currentUser.Rol === 'admin';
+  // Rolü küçük harfe çevirerek karşılaştır
+  const role = (currentUser.Rol || '').toLowerCase();
+  return role === 'admin';
 }
 // 'destek' rolü: satis kullanıcısıyla aynı yetkiler + admin paneli görmez funnel'de ayrı sayılır
 function isDestek() {
@@ -669,7 +678,7 @@ function getFunnelRol() {
   if (!currentUser) return 'saha';
   if (currentUser.Rol === 'satis') return 'saha';
   if (currentUser.Rol === 'destek') return 'destek';
-  if (currentUser.Rol === 'admin') return 'admin';  // ✅ YENİ: admin kendi kategorisinde
+  if (currentUser.Rol === 'admin') return 'admin';
   return 'saha';
 }
 
@@ -959,6 +968,9 @@ function closeReasonPanel() {
   if (panel) {
     panel.style.display = 'none';
   }
+  // ⚠️ DİKKAT: Burada clearBasket() veya _doClearBasket() ÇAĞIRMAYIN!
+  // Sepet zaten boş olduğu için bu panel açıldı, tekrar temizlemek döngüye sokar
+  console.log("🔘 Kaçış paneli kapatıldı, sepet dokunulmadı.");
 }
 
 // ─── OTURUM TAKİP (Funnel) ──────────────────────────────────────
@@ -1071,179 +1083,436 @@ async function openSiparisNotSafe(idx) {
 
 function saveBasket() {
   localStorage.setItem('aygun_basket', JSON.stringify(basket));
-  // Session datasını her sepet değişiminde anlık localStorage'a yaz
   if (_sessionData.startTime) {
     localStorage.setItem('_sd', JSON.stringify({
       searches:       _sessionData.searches       || [],
       revealedPrices: _sessionData.revealedPrices || [],
-      blurUrunler:    _sessionData.blurUrunler    || {},  // ✅ YENİ: Blur ürünleri de kaydediliyor
+      blurUrunler:    _sessionData.blurUrunler    || {},
       startTime:      _sessionData.startTime
     }));
   }
   updateCartUI();
-  if(currentUser && _db) {
+  if (currentUser && _db) {
     const email = currentUser.Email;
     const today = new Date().toISOString().split('T')[0];
-    // Analytics snapshot
-    const snap  = basket.map(i => ({urun: i.urun, nakit: i.nakit, stok: i.stok}));
-    setDoc(doc(_db, 'basket_snapshots', email.replace(/[^a-zA-Z0-9]/g,'_')+'_'+today), {
+    const snap = basket.map(i => ({ urun: i.urun, nakit: i.nakit, stok: i.stok }));
+    setDoc(doc(_db, 'basket_snapshots', email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + today), {
       email, date: today, basketSnapshot: snap, basketTs: new Date().toISOString()
-    }, {merge: true}).catch(() => {});
-    // Canlı sepet — session data dahil (kaçış koruması)
-    if (basket.length > 0) {
-      setDoc(doc(_db, 'live_baskets', email), {
+    }, { merge: true }).catch(() => {});
+    
+    const basketRef = doc(_db, 'live_baskets', email);
+    if (basket.length === 0) {
+      deleteDoc(basketRef).catch(e => console.warn('live_baskets silinemedi:', e));
+    } else {
+      setDoc(basketRef, {
         basket, lastActive: serverTimestamp(),
         personel: email, personelAd: currentUser.Ad || email.split('@')[0],
         funnelRol: getFunnelRol(),
         sessionData: {
           searches:       _sessionData.searches       || [],
           revealedPrices: _sessionData.revealedPrices || [],
-          blurUrunler:    _sessionData.blurUrunler    || {},  // ✅ YENİ
+          blurUrunler:    _sessionData.blurUrunler    || {},
           startTime:      _sessionData.startTime      || Date.now()
         }
-      }, {merge: true}).catch(() => {});
+      }, { merge: true }).catch(e => console.warn('live_baskets güncellenemedi:', e));
     }
   }
 }
+
+// =============================================================
+// GEÇİCİ SİLME DEĞİŞKENLERİ (global)
+// =============================================================
+let _pendingDeleteIndex = null;      // Tekli silme için bekleyen index
+let _pendingDeleteIndices = [];       // Toplu silme için bekleyen index listesi
+
+// =============================================================
+// SİLME FONKSİYONLARI (şimdi sadece modal açar, hemen silmez)
+// =============================================================
 function removeFromBasket(i) {
   haptic(12);
-  const removed = basket[i];
-  logSepet('cikar', removed?.nakit||0, removed?.urun||null);
-  basket.splice(i,1);
-  saveBasket();
-}
-async function clearBasket(bypass = false, sonucOverride = null, nedenOverride = '') {
-  haptic(30);
 
-  if (basket.length === 0) {
-    if (!bypass) await ayAlert('Sepet zaten boş.');
-    return;
-  }
-
-  // bypass: log zaten yazıldı (finalizeAksiyon üzerinden)
-  if (bypass) {
-    if (sonucOverride) await logSessionResult(sonucOverride, nedenOverride);
-    _doClearBasket();
-    return;
-  }
-
-  // Admin: sadece onay, log yok
+  // ✅ DÜZELTME — Admin için neden sorulmaz, direkt sil
   if (isAdmin()) {
-    if (!(await ayDanger('Sepeti temizle?'))) return;
-    _doClearBasket();
+    const removed = basket[i];
+    if (removed) logSepet('cikar', removed.nakit || 0, removed.urun || null);
+    basket.splice(i, 1);
+    saveBasket();
+    updateCartUI();
     return;
   }
 
-  // Saha personeli → modal (Teklif butonu YOK — resmi WA/PDF zorlanıyor)
-  const modal = document.getElementById('session-result-modal');
-  if (!modal) { _doClearBasket(); return; }
+  // Normal kullanıcı: neden sorma panelini aç
+  _pendingDeleteIndex = i;
+  _pendingDeleteIndices = [];   // temizlik
 
-  // Butonları temizle, kaçtı panel sıfırla
+  // Neden sorma panelini aç
+  showReasonModal('kacti', 'Ürün sepetten çıkarılacak, lütfen neden belirtin:');
+}
+
+window.deleteSelectedItems = function() {
+  const checkboxes = document.querySelectorAll('.cart-item-checkbox:checked');
+  if (checkboxes.length === 0) {
+    ayAlert("Lütfen silmek için en az bir ürün seçin.");
+    return;
+  }
+
+  // Seçili indexleri geçici listeye al (büyükten küçüğe sırala)
+  _pendingDeleteIndices = Array.from(checkboxes).map(cb => parseInt(cb.value)).sort((a, b) => b - a);
+  _pendingDeleteIndex = null;   // tekli silme değil
+  
+  // Neden sorma panelini aç
+  showReasonModal('kacti', 'Seçilen ürünler silinecek, lütfen neden belirtin:');
+};
+
+// =============================================================
+// NEDEN SORMA MODALI (silme işlemi burada gerçekleşir)
+// =============================================================
+async function showReasonModal(sonucTip = 'kacti', aciklama = '') {
+  const existingModal = document.getElementById('session-result-modal');
+  if (existingModal && existingModal.style.display === 'flex') return;
+  
+  const modal = document.getElementById('session-result-modal');
+  if (!modal) return;
+  
+  const kpanel = modal.querySelector('.kacti-neden-panel');
+  if (kpanel) kpanel.style.display = 'none';
+  
+  const satisBtn = document.getElementById('session-result-satis');
+  if (satisBtn) {
+    satisBtn.style.opacity = '1';
+    satisBtn.style.pointerEvents = 'auto';
+    satisBtn.title = '';
+  }
+  
+  const kactiBtn = document.getElementById('session-result-kacti');
+  if (kactiBtn) {
+    kactiBtn.style.transform = '';
+    kactiBtn.style.boxShadow = '';
+  }
+  
+  modal.style.display = 'flex';
+  
+  // ✅ NEDEN SEÇİLDİĞİNDE YAPILACAKLAR (silme işlemi burada)
+  const handleKacti = async (neden) => {
+    modal.style.display = 'none';
+    if (kpanel) kpanel.style.display = 'none';
+    
+    // Bekleyen silme işlemlerini gerçekleştir
+    if (_pendingDeleteIndex !== null) {
+      // Tekli silme
+      const removed = basket[_pendingDeleteIndex];
+      if (removed) logSepet('cikar', removed?.nakit || 0, removed?.urun || null);
+      basket.splice(_pendingDeleteIndex, 1);
+    } else if (_pendingDeleteIndices.length > 0) {
+      // Toplu silme (zaten büyükten küçüğe sıralı)
+      _pendingDeleteIndices.forEach(idx => {
+        const removed = basket[idx];
+        if (removed) logSepet('cikar', removed?.nakit || 0, removed?.urun || null);
+        basket.splice(idx, 1);
+      });
+    }
+    
+    // Verileri kaydet ve UI güncelle
+    saveBasket();
+    updateCartUI();
+    
+    // Log kaydı
+    await logSessionResult(sonucTip, neden);
+    
+    // Geçici değişkenleri sıfırla
+    _pendingDeleteIndex = null;
+    _pendingDeleteIndices = [];
+  };
+  
+  const handleSatis = async () => {
+    modal.style.display = 'none';
+    if (kpanel) kpanel.style.display = 'none';
+    
+    // Satış yapıldı – sepet zaten dolu, ürünler kalır (silme yok)
+    await logSessionResult('satis', 'Satış yapıldı');
+    
+    // Geçici değişkenleri sıfırla (silinmemiş olabilir)
+    _pendingDeleteIndex = null;
+    _pendingDeleteIndices = [];
+  };
+  
+  // Vazgeç butonu (X) – sadece modalı kapatır, silme yapmaz
+  const vazgecBtn = document.getElementById('session-result-vazgec');
+  if (vazgecBtn) {
+    const newVazgec = vazgecBtn.cloneNode(true);
+    vazgecBtn.parentNode.replaceChild(newVazgec, vazgecBtn);
+    newVazgec.addEventListener('click', () => {
+      modal.style.display = 'none';
+      if (kpanel) kpanel.style.display = 'none';
+      // Geçici değişkenleri sıfırla (silme iptal edildi)
+      _pendingDeleteIndex = null;
+      _pendingDeleteIndices = [];
+    }, { once: true });
+  }
+  
+  // Satış butonu
+  const satisBtnClone = document.getElementById('session-result-satis');
+  if (satisBtnClone) {
+    const newSatis = satisBtnClone.cloneNode(true);
+    satisBtnClone.parentNode.replaceChild(newSatis, satisBtnClone);
+    newSatis.addEventListener('click', () => {
+      handleSatis();
+    }, { once: true });
+  }
+  
+  // Kaçtı butonu (neden panelini açar)
+  const kactiBtnClone = document.getElementById('session-result-kacti');
+  if (kactiBtnClone) {
+    const newKacti = kactiBtnClone.cloneNode(true);
+    kactiBtnClone.parentNode.replaceChild(newKacti, kactiBtnClone);
+    newKacti.addEventListener('click', () => {
+      const kpanelLocal = modal.querySelector('.kacti-neden-panel');
+      if (kpanelLocal) {
+        kpanelLocal.style.display = 'flex';
+      } else {
+        handleKacti('');
+      }
+    }, { once: true });
+  }
+  
+  // Neden butonları
+  modal.querySelectorAll('.kacti-neden-btn').forEach(btn => {
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', () => {
+      handleKacti(newBtn.dataset.neden || '');
+    }, { once: true });
+  });
+}
+
+// =============================================================
+// SEPET BOŞALDIĞINDA AÇILACAK MODAL (SATIŞ BUTONU PASİF)
+// =============================================================
+async function showEmptyCartModal() {
+  const existingModal = document.getElementById('session-result-modal');
+  if (existingModal && existingModal.style.display === 'flex') return;
+  
+  const modal = document.getElementById('session-result-modal');
+  if (!modal) return;
+  
+  const kpanel = modal.querySelector('.kacti-neden-panel');
+  if (kpanel) kpanel.style.display = 'none';
+  
+  const satisBtn = document.getElementById('session-result-satis');
+  if (satisBtn) {
+    satisBtn.style.opacity = '0.5';
+    satisBtn.style.pointerEvents = 'none';
+    satisBtn.title = 'Sepet boşken satış yapılamaz';
+  }
+  
+  const kactiBtn = document.getElementById('session-result-kacti');
+  if (kactiBtn) {
+    kactiBtn.style.transform = 'scale(1.02)';
+    kactiBtn.style.boxShadow = '0 0 0 2px #dc2626';
+  }
+  
+  modal.style.display = 'flex';
+  
+  const handleKacti = async (neden) => {
+    modal.style.display = 'none';
+    if (kpanel) kpanel.style.display = 'none';
+    await logSessionResult('kacti', neden);
+    _sessionData = { searches:[], revealedPrices:[], blurUrunler:{}, startTime: null };
+    localStorage.removeItem('_sd');
+    if (satisBtn) {
+      satisBtn.style.opacity = '1';
+      satisBtn.style.pointerEvents = 'auto';
+    }
+    if (kactiBtn) {
+      kactiBtn.style.transform = '';
+      kactiBtn.style.boxShadow = '';
+    }
+  };
+  
+  const vazgecBtn = document.getElementById('session-result-vazgec');
+  if (vazgecBtn) {
+    const newVazgec = vazgecBtn.cloneNode(true);
+    vazgecBtn.parentNode.replaceChild(newVazgec, vazgecBtn);
+    newVazgec.addEventListener('click', () => {
+      modal.style.display = 'none';
+      if (kpanel) kpanel.style.display = 'none';
+      if (satisBtn) {
+        satisBtn.style.opacity = '1';
+        satisBtn.style.pointerEvents = 'auto';
+      }
+      if (kactiBtn) {
+        kactiBtn.style.transform = '';
+        kactiBtn.style.boxShadow = '';
+      }
+    }, { once: true });
+  }
+  
+  const newKactiBtn = document.getElementById('session-result-kacti');
+  if (newKactiBtn) {
+    const clonedKacti = newKactiBtn.cloneNode(true);
+    newKactiBtn.parentNode.replaceChild(clonedKacti, newKactiBtn);
+    clonedKacti.addEventListener('click', () => {
+      const kpanelLocal = modal.querySelector('.kacti-neden-panel');
+      if (kpanelLocal) {
+        kpanelLocal.style.display = 'flex';
+      } else {
+        handleKacti('');
+      }
+    }, { once: true });
+  }
+  
+  modal.querySelectorAll('.kacti-neden-btn').forEach(btn => {
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', () => {
+      handleKacti(newBtn.dataset.neden || '');
+    }, { once: true });
+  });
+}
+// =============================================================
+// SEPET TEMİZLEME (GLOBAL)
+// =============================================================
+window.clearBasket = function(bypass = false, sonucOverride = null, nedenOverride = '') {
+  console.log("🗑️ clearBasket çağrıldı, sepet durumu:", basket.length);
+  if (basket.length === 0) {
+    if (!bypass) ayAlert('Sepet zaten boş.');
+    return;
+  }
+  if (bypass) {
+    if (sonucOverride) {
+      logSessionResult(sonucOverride, nedenOverride).catch(e => console.warn(e));
+    }
+    _doClearBasket();
+    return;
+  }
+  if (isAdmin()) {
+    ayDanger('Sepeti temizle?').then(cevap => {
+      if (cevap) _doClearBasket();
+    });
+    return;
+  }
+  const modal = document.getElementById('session-result-modal');
+  if (!modal) { 
+    _doClearBasket(); 
+    return; 
+  }
   const kpanel = modal.querySelector('.kacti-neden-panel');
   if (kpanel) kpanel.style.display = 'none';
   ['session-result-satis','session-result-kacti','session-result-vazgec'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    const c = el.cloneNode(true); el.parentNode.replaceChild(c, el);
+    const el = document.getElementById(id); 
+    if (!el) return;
+    const c = el.cloneNode(true); 
+    el.parentNode.replaceChild(c, el);
   });
-
   modal.style.display = 'flex';
-
   const handleSonuc = async (sonuc, neden = '') => {
     modal.style.display = 'none';
     if (kpanel) kpanel.style.display = 'none';
-    await logSessionResult(sonuc, neden);
+    try {
+      await logSessionResult(sonuc, neden);
+    } catch(e) { console.warn(e); }
     _doClearBasket();
-    // Session sıfırla
     _sessionData = { searches:[], revealedPrices:[], blurUrunler:{}, startTime: null };
     localStorage.removeItem('_sd');
   };
-
   document.getElementById('session-result-satis')?.addEventListener('click',
     () => handleSonuc('satis', ''), { once: true });
-    
   document.getElementById('session-result-kacti')?.addEventListener('click', () => {
-    if (kpanel) { kpanel.style.display = 'flex'; } else { handleSonuc('kacti',''); }
+    if (kpanel) { 
+      kpanel.style.display = 'flex'; 
+    } else { 
+      handleSonuc('kacti',''); 
+    }
   }, { once: true });
-  
-  // ✅ DÜZELTİLMİŞ: Vazgeç butonu - Sadece timer sıfırlama (toast yok)
   document.getElementById('session-result-vazgec')?.addEventListener('click', () => {
     modal.style.display = 'none';
-    
-    // Hareketsizlik sayacını sıfırla (personel görüşmeye devam ediyor)
     if (typeof resetSessionTimer === 'function') {
       resetSessionTimer();
     }
-    
-    // Kaçtı panelini gizle (açıksa)
     if (kpanel) kpanel.style.display = 'none';
   }, { once: true });
-  
-  // Kaçtı neden butonları
   modal.querySelectorAll('.kacti-neden-btn').forEach(btn => {
-    btn.addEventListener('click', () => handleSonuc('kacti', btn.dataset.neden||''), { once: true });
+    const newBtn = btn.cloneNode(true);
+    btn.parentNode.replaceChild(newBtn, btn);
+    newBtn.addEventListener('click', () => {
+      handleSonuc('kacti', newBtn.dataset.neden || '');
+    }, { once: true });
   });
-}
+};
 
-// Gerçek sepet temizleme (log sonrası çağrılır)
 function _doClearBasket() {
+  console.log("📦 _doClearBasket çalıştı, sepet temizleniyor...");
   basket = [];
   discountAmount = 0;
   abakusSelection = null;
   const di = document.getElementById('discount-input');
   if (di) di.value = '';
   saveBasket();
-  if (currentUser && _db)
+  if (currentUser && _db) {
     deleteDoc(doc(_db, 'live_baskets', currentUser.Email)).catch(() => {});
+  }
   _sessionData = { searches:[], revealedPrices:[], blurUrunler:{}, startTime: null };
   localStorage.removeItem('_sd');
-  _blurSessionActive  = false;
+  _blurSessionActive = false;
   _blurSessionUrunler = {};
   updateCartUI();
 }
+
+// =============================================================
+// İNDİRİM VE SEPET FONKSİYONLARI
+// =============================================================
 function applyDiscount() {
-  const raw = (document.getElementById('discount-input').value||'').trim();
-  // "500+400+300" gibi toplam ifadelerini hesapla
-  if(raw && /^[\d\s\+\-\.]+$/.test(raw)) {
+  const raw = (document.getElementById('discount-input').value || '').trim();
+  if (raw && /^[\d\s\+\-\.]+$/.test(raw)) {
     try {
-      const parts = raw.split('+').map(s=>parseFloat(s.trim())||0);
-      discountAmount = parts.reduce((a,b)=>a+b, 0);
-      if(raw.includes('+')) {
-        // Toplamı input'a yaz
+      const parts = raw.split('+').map(s => parseFloat(s.trim()) || 0);
+      discountAmount = parts.reduce((a, b) => a + b, 0);
+      if (raw.includes('+')) {
         document.getElementById('discount-input').value = discountAmount;
       }
-    } catch(e) { discountAmount = parseFloat(raw)||0; }
+    } catch(e) { 
+      discountAmount = parseFloat(raw) || 0; 
+    }
   } else {
-    discountAmount = parseFloat(raw)||0;
+    discountAmount = parseFloat(raw) || 0;
   }
-  discountType=document.getElementById('discount-type').value||'TRY';
+  discountType = document.getElementById('discount-type').value || 'TRY';
   updateCartUI();
 }
-function getDisc(t) { return discountType==='TRY'?discountAmount:t*discountAmount/100; }
+
+function getDisc(t) { 
+  return discountType === 'TRY' ? discountAmount : t * discountAmount / 100; 
+}
+
 function basketTotals() {
-  const t={dk:0,awm:0,tek:0,nakit:0};
-  basket.forEach(i=>{t.dk+=i.dk;t.awm+=i.awm;t.tek+=i.tek;t.nakit+=i.nakit;});
+  const t = { dk: 0, awm: 0, tek: 0, nakit: 0 };
+  basket.forEach(i => {
+    t.dk += i.dk;
+    t.awm += i.awm;
+    t.tek += i.tek;
+    t.nakit += i.nakit;
+  });
   return t;
 }
 
 function setItemDisc(idx, val) {
-  if(!basket[idx]) return;
+  if (!basket[idx]) return;
   const disc = parseFloat(val) || 0;
   basket[idx].itemDisc = disc >= 0 ? disc : 0;
   saveBasket();
-  // Sadece toplam göstergesini güncelle, re-render yok (klavye kaybolmasın)
-  const totalItemDisc = basket.reduce((s,i)=>s+(i.itemDisc||0),0);
+  const totalItemDisc = basket.reduce((s, i) => s + (i.itemDisc || 0), 0);
   const panel = document.getElementById('cart-disc-panel');
-  if(panel) {
+  if (panel) {
     const span = panel.querySelector('span');
-    if(span && totalItemDisc > 0) span.textContent = 'Toplam satır ind: ' + fmt(totalItemDisc);
+    if (span && totalItemDisc > 0) span.textContent = 'Toplam satır ind: ' + fmt(totalItemDisc);
   }
 }
 
 function toggleCartDiscPanel() {
   const panel = document.getElementById('cart-disc-panel');
-  if(!panel) return;
+  if (!panel) return;
   const isOpen = panel.dataset.open === '1';
-  if(isOpen) {
+  if (isOpen) {
     basket.forEach(i => { i.itemDisc = 0; });
     saveBasket();
     window._cartDiscOpen = false;
@@ -1253,88 +1522,148 @@ function toggleCartDiscPanel() {
   updateCartUI();
 }
 
-// ─── SEPET UI ───────────────────────────────────────────────────
+// =============================================================
+// SEPET ARAYÜZÜ (hatalı karakterler temizlenmiş)
+// =============================================================
 function updateCartUI() {
-  const ce=document.getElementById('cart-count'); if(ce) ce.innerText=basket.length;
-  const badge=document.getElementById('cart-modal-count'); if(badge) badge.textContent=basket.length+' ürün';
-  const area=document.getElementById('cart-table-area'); if(!area) return;
-  if(!basket.length) { area.innerHTML='<div class="empty-cart"><span class="empty-cart-icon">🛒</span>Sepetiniz boş</div>'; return; }
-  const t=basketTotals();
-  let rows='';
-  if(isAdmin()) {
-    // ── Admin sepeti: Her ürünün satırında % veya ₺ indirim butonu ─
-    const totalItemDisc2 = basket.reduce((s,i)=>s+(i.itemDisc||0),0);
-    basket.forEach((item,idx) => {
+  const ce = document.getElementById('cart-count'); 
+  if (ce) ce.innerText = basket.length;
+  const badge = document.getElementById('cart-modal-count'); 
+  if (badge) badge.textContent = basket.length + ' ürün';
+  const area = document.getElementById('cart-table-area'); 
+  if (!area) return;
+  
+  if (!basket.length) { 
+    area.innerHTML = '<div class="empty-cart"><span class="empty-cart-icon">🛒</span>Sepetiniz boş</div>'; 
+    return; 
+  }
+  
+  const t = basketTotals();
+  let rows = '';
+  
+  const bulkDeleteBtn = `
+    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
+      <button onclick="deleteSelectedItems()" class="btn-delete-selected" 
+        style="background:#dc2626; color:white; border:none; border-radius:8px; 
+        padding:6px 12px; font-size:.7rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+        🗑️ Seçili Olanları Sil
+      </button>
+    </div>
+  `;
+  
+  if (isAdmin()) {
+    const totalItemDisc2 = basket.reduce((s,i) => s + (i.itemDisc || 0), 0);
+    
+    basket.forEach((item, idx) => {
       const itemDisc = item.itemDisc || 0;
       const nakitNet = Math.max(0, item.nakit - itemDisc);
       const hasDisc = itemDisc > 0;
-      rows+=`<tr class="${hasDisc?'row-has-disc':''}">`+
-        `<td><span class="product-name" style="font-size:.74rem">${item.urun}</span></td>`+
-        `<td class="${item.stok===0?'cart-stok-0':''}" style="font-size:.71rem">${item.stok}</td>`+
-        `<td style="font-size:.63rem;color:var(--text-3);max-width:80px;word-break:break-word">${item.aciklama||'—'}</td>`+
-        `<td class="cart-price${hasDisc?' cart-price-old':''}">${fmt(item.nakit)}</td>`+
-        `<td style="padding:4px 6px">`+
-          `<div style="display:flex;align-items:center;gap:3px">`+
-            `<input type="number" class="item-disc-input" min="0" value="${itemDisc||''}" placeholder="ind."`+
-              ` onblur="setItemDisc(${idx},this.value)"`+
-              ` onkeydown="if(event.key==='Enter'){setItemDisc(${idx},this.value);this.blur()}"`+
-              ` style="width:52px;padding:3px 4px;border:1px solid ${hasDisc?'#93c5fd':'var(--border)'};border-radius:5px;font-size:.67rem;text-align:right;background:${hasDisc?'#eff6ff':'var(--surface)'};">`+
-            `${hasDisc?`<button onclick="setItemDisc(${idx},0);this.closest('tr').querySelector('.item-disc-input').value=''" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:1px;font-size:.75rem;line-height:1" title="İndirimi sıfırla">✕</button>`:''}`+
-          `</div>`+
-        `</td>`+
-        `<td class="cart-price${hasDisc?' cart-price-net':''}">${hasDisc?fmt(nakitNet):''}</td>`+
-        `<td><button class="remove-btn haptic-btn" onclick="removeFromBasket(${idx})">×</button></td></tr>`;
+      
+      rows += `<tr class="${hasDisc ? 'row-has-disc' : ''}">
+        <td style="width:30px; text-align:center;">
+          <input type="checkbox" class="cart-item-checkbox" value="${idx}" style="width:18px; height:18px; cursor:pointer;">
+         <\/td>
+        <td><span class="product-name" style="font-size:.74rem">${item.urun}</span><\/td>
+        <td class="${item.stok === 0 ? 'cart-stok-0' : ''}" style="font-size:.71rem">${item.stok}<\/td>
+        <td style="font-size:.63rem;color:var(--text-3);max-width:80px;word-break:break-word">${item.aciklama || '—'}<\/td>
+        <td class="cart-price${hasDisc ? ' cart-price-old' : ''}">${fmt(item.nakit)}<\/td>
+        <td style="padding:4px 6px">
+          <div style="display:flex;align-items:center;gap:3px">
+            <input type="number" class="item-disc-input" min="0" value="${itemDisc || ''}" placeholder="ind."
+              onblur="setItemDisc(${idx}, this.value)"
+              onkeydown="if(event.key==='Enter'){setItemDisc(${idx}, this.value); this.blur()}"
+              style="width:52px;padding:3px 4px;border:1px solid ${hasDisc ? '#93c5fd' : 'var(--border)'};border-radius:5px;font-size:.67rem;text-align:right;background:${hasDisc ? '#eff6ff' : 'var(--surface)'};">
+            ${hasDisc ? `<button onclick="setItemDisc(${idx}, 0); this.closest('tr').querySelector('.item-disc-input').value=''" style="background:none;border:none;color:#94a3b8;cursor:pointer;padding:1px;font-size:.75rem;line-height:1" title="İndirimi sıfırla">✕</button>` : ''}
+          </div>
+        <\/td>
+        <td class="cart-price${hasDisc ? ' cart-price-net' : ''}">${hasDisc ? fmt(nakitNet) : ''}<\/td>
+        <td><button class="remove-btn haptic-btn" onclick="removeFromBasket(${idx})">×</button><\/td>
+      <\/tr>`;
     });
-    // Satır indirim toplamı satırı
+    
     let dr_item = '';
-    if(totalItemDisc2 > 0) {
-      dr_item = `<tr class="discount-row" style="background:#f0fdf4">` +
-        `<td colspan="3" style="text-align:right;font-size:.68rem;color:#15803d">Satır İndirimleri Toplamı</td>` +
-        `<td class="cart-price" style="text-decoration:none;color:#6b7280;font-size:.75rem">${fmt(t.nakit)}</td>` +
-        `<td></td>` +
-        `<td class="cart-price" style="color:#16a34a;font-weight:700">-${fmt(totalItemDisc2)}</td><td></td></tr>`;
+    if (totalItemDisc2 > 0) {
+      dr_item = `<tr class="discount-row" style="background:#f0fdf4">
+        <td colspan="4" style="text-align:right;font-size:.68rem;color:#15803d">Satır İndirimleri Toplamı<\/td>
+        <td class="cart-price" style="text-decoration:none;color:#6b7280;font-size:.75rem">${fmt(t.nakit)}<\/td>
+        <td><\/td>
+        <td class="cart-price" style="color:#16a34a;font-weight:700">-${fmt(totalItemDisc2)}<\/td>
+        <td><\/td>
+      <\/tr>`;
     }
-    // Alt genel indirim satırı
+    
     const baseAfterItemDisc = t.nakit - totalItemDisc2;
-    let dr='';
-    if(discountAmount>0) {
-      dr=`<tr class="discount-row" style="background:#fff7ed">` +
-        `<td colspan="3" style="text-align:right;font-size:.68rem;color:#c2410c">Alt İndirim ${discountType==='PERCENT'?'%'+discountAmount:fmt(discountAmount)}</td>` +
-        `<td class="cart-price" style="color:#6b7280;font-size:.75rem">${fmt(baseAfterItemDisc)}</td>` +
-        `<td></td>` +
-        `<td class="cart-price" style="color:#f97316;font-weight:700">-${fmt(getDisc(baseAfterItemDisc))}</td><td></td></tr>`;
+    let dr = '';
+    if (discountAmount > 0) {
+      dr = `<tr class="discount-row" style="background:#fff7ed">
+        <td colspan="4" style="text-align:right;font-size:.68rem;color:#c2410c">Alt İndirim ${discountType === 'PERCENT' ? '%' + discountAmount : fmt(discountAmount)}<\/td>
+        <td class="cart-price" style="color:#6b7280;font-size:.75rem">${fmt(baseAfterItemDisc)}<\/td>
+        <td><\/td>
+        <td class="cart-price" style="color:#f97316;font-weight:700">-${fmt(getDisc(baseAfterItemDisc))}<\/td>
+        <td><\/td>
+      <\/tr>`;
     }
+    
     const nakitFinal = baseAfterItemDisc - getDisc(baseAfterItemDisc);
-    const tot=`<tr class="total-row"><td colspan="3" style="text-align:right;font-weight:800;font-size:.78rem">NET TOPLAM</td>`+
-      `<td class="cart-price" style="text-decoration:${(discountAmount>0||totalItemDisc2>0)?'line-through':'none'};opacity:${(discountAmount>0||totalItemDisc2>0)?'.45':'1'};font-size:.72rem">${fmt(t.nakit)}</td>`+
-      `<td></td>`+
-      `<td class="cart-price" style="font-weight:800;color:var(--text-1);font-size:.85rem">${fmt(Math.max(0,nakitFinal))}</td><td></td></tr>`;
-    area.innerHTML=`<table class="cart-table"><thead><tr>`+
-      `<th>Ürün</th><th>Stok</th><th>Açıklama</th><th>Liste</th><th style="min-width:70px">Satır İnd.</th><th>Net</th><th></th>`+
-      `</tr></thead><tbody>${rows}${dr_item}${dr}${tot}</tbody></table>`;
+    const tot = `<tr class="total-row">
+      <td colspan="4" style="text-align:right;font-weight:800;font-size:.78rem">NET TOPLAM<\/td>
+      <td class="cart-price" style="text-decoration:${(discountAmount > 0 || totalItemDisc2 > 0) ? 'line-through' : 'none'};opacity:${(discountAmount > 0 || totalItemDisc2 > 0) ? '.45' : '1'};font-size:.72rem">${fmt(t.nakit)}<\/td>
+      <td><\/td>
+      <td class="cart-price" style="font-weight:800;color:var(--text-1);font-size:.85rem">${fmt(Math.max(0, nakitFinal))}<\/td>
+      <td><\/td>
+    <\/tr>`;
+    
+    area.innerHTML = bulkDeleteBtn + `<table class="cart-table">
+      <thead>
+        <th style="width:30px"></th><th>Ürün</th><th>Stok</th><th>Açıklama</th><th>Liste</th><th style="min-width:70px">Satır İnd.</th><th>Net</th><th></th>
+      </thead>
+      <tbody>${rows}${dr_item}${dr}${tot}</tbody>
+    <\/table>`;
+    
   } else {
-    // ── Satış kullanıcısı sepeti: eski düzen (D.Kart/AWM/Tek) ─
-    basket.forEach((item,idx) => {
-      rows+=`<tr>`+
-        `<td><span class="product-name" style="font-size:.75rem">${item.urun}</span></td>`+
-        `<td class="${item.stok===0?'cart-stok-0':''}">${item.stok}</td>`+
-        `<td style="font-size:.65rem;color:var(--text-3);max-width:90px;word-break:break-word">${item.aciklama}</td>`+
-        `<td class="cart-price">${fmt(item.dk)}</td>`+
-        `<td class="cart-price">${fmt(item.awm)}</td>`+
-        `<td class="cart-price">${fmt(item.tek)}</td>`+
-        `<td class="cart-price">${fmt(item.nakit)}</td>`+
-        `<td><button class="remove-btn haptic-btn" onclick="removeFromBasket(${idx})">×</button></td></tr>`;
+    basket.forEach((item, idx) => {
+      rows += `<tr>
+        <td style="width:30px; text-align:center;">
+          <input type="checkbox" class="cart-item-checkbox" value="${idx}" style="width:18px; height:18px; cursor:pointer;">
+        <\/td>
+        <td><span class="product-name" style="font-size:.75rem">${item.urun}</span><\/td>
+        <td class="${item.stok === 0 ? 'cart-stok-0' : ''}">${item.stok}<\/td>
+        <td style="font-size:.65rem;color:var(--text-3);max-width:90px;word-break:break-word">${item.aciklama}<\/td>
+        <td class="cart-price">${fmt(item.dk)}<\/td>
+        <td class="cart-price">${fmt(item.awm)}<\/td>
+        <td class="cart-price">${fmt(item.tek)}<\/td>
+        <td class="cart-price">${fmt(item.nakit)}<\/td>
+        <td><button class="remove-btn haptic-btn" onclick="removeFromBasket(${idx})">×</button><\/td>
+      <\/tr>`;
     });
-    let dr='';
-    if(discountAmount>0) {
-      dr=`<tr class="discount-row"><td colspan="3" style="text-align:right;font-size:.69rem">İndirim ${discountType==='PERCENT'?'%'+discountAmount:fmt(discountAmount)}</td>`+
-        `<td class="cart-price">-${fmt(getDisc(t.dk))}</td><td class="cart-price">-${fmt(getDisc(t.awm))}</td>`+
-        `<td class="cart-price">-${fmt(getDisc(t.tek))}</td><td class="cart-price">-${fmt(getDisc(t.nakit))}</td><td></td></tr>`;
+    
+    let dr = '';
+    if (discountAmount > 0) {
+      dr = `<tr class="discount-row">
+        <td colspan="4" style="text-align:right;font-size:.69rem">İndirim ${discountType === 'PERCENT' ? '%' + discountAmount : fmt(discountAmount)}<\/td>
+        <td class="cart-price">-${fmt(getDisc(t.dk))}<\/td>
+        <td class="cart-price">-${fmt(getDisc(t.awm))}<\/td>
+        <td class="cart-price">-${fmt(getDisc(t.tek))}<\/td>
+        <td class="cart-price">-${fmt(getDisc(t.nakit))}<\/td>
+        <td><\/td>
+      <\/tr>`;
     }
-    const tot=`<tr class="total-row"><td colspan="3" style="text-align:right;font-weight:700">NET TOPLAM</td>`+
-      `<td class="cart-price">${fmt(t.dk-getDisc(t.dk))}</td><td class="cart-price">${fmt(t.awm-getDisc(t.awm))}</td>`+
-      `<td class="cart-price">${fmt(t.tek-getDisc(t.tek))}</td><td class="cart-price">${fmt(t.nakit-getDisc(t.nakit))}</td><td></td></tr>`;
-    area.innerHTML=`<table class="cart-table"><thead><tr><th>Ürün</th><th>Stok</th><th>Açıklama</th><th>D.Kart</th><th>4T AWM</th><th>Tek Çekim</th><th>Nakit</th><th></th></tr></thead><tbody>${rows}${dr}${tot}</tbody></table>`;
+    
+    const tot = `<tr class="total-row">
+      <td colspan="4" style="text-align:right;font-weight:700">NET TOPLAM<\/td>
+      <td class="cart-price">${fmt(t.dk - getDisc(t.dk))}<\/td>
+      <td class="cart-price">${fmt(t.awm - getDisc(t.awm))}<\/td>
+      <td class="cart-price">${fmt(t.tek - getDisc(t.tek))}<\/td>
+      <td class="cart-price">${fmt(t.nakit - getDisc(t.nakit))}<\/td>
+      <td><\/td>
+    <\/tr>`;
+    
+    area.innerHTML = bulkDeleteBtn + `<table class="cart-table">
+      <thead>
+        <th style="width:30px"></th><th>Ürün</th><th>Stok</th><th>Açıklama</th><th>D.Kart</th><th>4T AWM</th><th>Tek Çekim</th><th>Nakit</th><th></th>
+      </thead>
+      <tbody>${rows}${dr}${tot}</tbody>
+    <\/table>`;
   }
 }
 
@@ -3680,8 +4009,33 @@ function _analRenderDaily(daily) {
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } } }
   });
 }
+
+// ✅ YENİ: Funnel filtreleme için yardımcı fonksiyon (global)
+// ✅ YENİ: Funnel filtreleme için yardımcı fonksiyon (global)
+window.setFunnelFilter = function(filter) {
+  console.log("🎯 Filtre değiştirildi:", filter);
+  
+  const cont = document.getElementById('funnel-analiz-konteynir');
+  if (cont) {
+    cont.dataset.funnelFiltre = filter;
+  }
+  
+  // Buton stillerini güncelle (hemen görünür olsun)
+  document.querySelectorAll('.funnel-filter-btn').forEach(btn => {
+    const isActive = btn.dataset.filter === filter;
+    btn.style.borderColor = isActive ? 'var(--red)' : 'var(--border)';
+    btn.style.background = isActive ? 'var(--red)' : 'var(--surface)';
+    btn.style.color = isActive ? '#fff' : 'var(--text-2)';
+  });
+  
+  // Veriyi yeniden yükle (force=true ile cooldown'u aş)
+  if (typeof loadFunnelAnaliz === 'function') {
+    loadFunnelAnaliz(90, true);
+  }
+};
+
 // ─── SATIŞ HUNİSİ ANALİZ ──────────────────────────────────────
-async function loadFunnelAnaliz(gunAralik = 90, force = false) {  // ✅ force parametresi eklendi
+async function loadFunnelAnaliz(gunAralik = 90, force = false) {
   const cont = document.getElementById('funnel-analiz-konteynir');
   if (!cont) return;
   
@@ -3727,18 +4081,35 @@ async function loadFunnelAnaliz(gunAralik = 90, force = false) {  // ✅ force p
       return;
     }
 
-// ── FİLTRE SEÇİMİ (Saha / Destek / Admin / Tümü) ─────────────────
-const aktifFiltre = cont.dataset.funnelFiltre || 'saha';
-const logs = aktifFiltre === 'hepsi'
-  ? allLogs
-  : allLogs.filter(l => {
-      const rol = l.funnelRol || 'saha';
-      if (aktifFiltre === 'saha') return rol === 'saha';
-      if (aktifFiltre === 'destek') return rol === 'destek' || rol === 'admin';
-      if (aktifFiltre === 'admin') return rol === 'admin';
-      return false;
+    // ── FİLTRE SEÇİMİ (Saha / Destek / Admin / Tümü) ─────────────────
+    // Aktif filtreyi al
+    let aktifFiltre = cont.dataset.funnelFiltre || 'saha';
+    
+    // ✅ Filtre butonlarının stillerini güncelle
+    document.querySelectorAll('.funnel-filter-btn').forEach(btn => {
+      const isActive = btn.dataset.filter === aktifFiltre;
+      btn.style.borderColor = isActive ? 'var(--red)' : 'var(--border)';
+      btn.style.background = isActive ? 'var(--red)' : 'var(--surface)';
+      btn.style.color = isActive ? '#fff' : 'var(--text-2)';
     });
-
+    
+    // Logları filtrele
+    const logs = aktifFiltre === 'hepsi'
+      ? allLogs
+      : allLogs.filter(l => {
+          const rol = l.funnelRol || 'saha';
+          if (aktifFiltre === 'saha') return rol === 'saha';
+          if (aktifFiltre === 'destek') return rol === 'destek' || rol === 'admin';
+          if (aktifFiltre === 'admin') return rol === 'admin';
+          return false;
+        });
+    
+    // Log sayısı sıfırsa uyarı göster
+    if (logs.length === 0) {
+      cont.innerHTML = `<div class="admin-empty">📭 "${aktifFiltre === 'saha' ? '👷 Saha' : aktifFiltre === 'destek' ? '🖥 Destek' : aktifFiltre === 'admin' ? '👑 Admin' : '🌐 Tümü'}" filtresinde veri yok.<br><span style="font-size:.72rem;color:var(--text-3)">Farklı bir filtre deneyin.</span></div>`;
+      _isFunnelLoading = false;
+      return;
+    }
     // ── TARİH DİLİMLERİ (Momentum) ────────────────────────────
     const bugun    = new Date().toISOString().split('T')[0];
     const son7Basi = new Date(Date.now() -  7*86400000).toISOString().split('T')[0];
@@ -3906,14 +4277,9 @@ logs.forEach(l => {
 <!-- Filtre -->
 <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
   ${['saha','destek','admin','hepsi'].map(f=>`
-    <button onclick="loadFunnelAnaliz(90, true)"  // ✅ force=true ile manuel yenileme
-      style="padding:6px 14px;border-radius:20px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;
-        border:1.5px solid ${aktifFiltre===f?'var(--red)':'var(--border)'};
-        background:${aktifFiltre===f?'var(--red)':'var(--surface)'};
-        color:${aktifFiltre===f?'#fff':'var(--text-2)'}"
-      onclick="
-        document.getElementById('funnel-analiz-konteynir').dataset.funnelFiltre='${f}';
-        loadFunnelAnaliz(90, true)">
+    <button class="funnel-filter-btn" data-filter="${f}"
+      onclick="setFunnelFilter('${f}')"
+      style="padding:6px 14px;border-radius:20px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;border:1.5px solid ${aktifFiltre===f?'var(--red)':'var(--border)'};background:${aktifFiltre===f?'var(--red)':'var(--surface)'};color:${aktifFiltre===f?'#fff':'var(--text-2)'}">
       ${f==='saha'?'👷 Saha':f==='destek'?'🖥 Destek':f==='admin'?'👑 Admin':'🌐 Tümü'}
     </button>`).join('')}
 </div>
@@ -4005,49 +4371,156 @@ logs.forEach(l => {
 // loadFunnelAnaliz üzerine filtre değişkeni ekle (butonlar için)
 loadFunnelAnaliz.filtre = 'saha';
 
-// ─── ADMİN ──────────────────────────────────────────────────────
-async function openAdmin() {
-  // Header'a kullanıcı adını yaz
+window.openAdmin = async function() {
+  console.log("Admin Paneli Açılıyor, Kullanıcı:", currentUser);
+  
+  // Rol kontrolü (büyük/küçük harf duyarsız)
+  const userRole = (currentUser?.Rol || "").toLowerCase();
+  if (userRole !== 'admin') {
+    console.warn("Yetkisiz erişim denemesi. Rol:", userRole);
+    if (typeof ayAlert === 'function') {
+      await ayAlert("Yetkisiz Erişim! Admin paneli için admin yetkisi gerekir.");
+    } else {
+      alert("Yetkisiz Erişim! Admin paneli için admin yetkisi gerekir.");
+    }
+    return;
+  }
+
+  const modal = document.getElementById('admin-modal');
+  if (!modal) {
+    console.error("HATA: 'admin-modal' ID'li element HTML içinde bulunamadı!");
+    return;
+  }
+
+  // Modalı göster
+  modal.style.zIndex = "9999";
+  modal.style.display = 'flex';
+  modal.classList.add('open');
+
+  // ✅ DÜZELTME — 5 sekme mobil CSS enjeksiyonu (bir kez eklenir)
+  if (!document.getElementById('_admin-5tab-css')) {
+    const st = document.createElement('style');
+    st.id = '_admin-5tab-css';
+    st.textContent = `
+      /* 5 sekme: scrollable tab bar, kompakt */
+      .admin-tabs {
+        display: flex;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        gap: 0;
+        border-bottom: 2px solid var(--border);
+        background: var(--surface);
+      }
+      .admin-tabs::-webkit-scrollbar { display: none; }
+      .admin-tab {
+        flex: 0 0 auto;
+        padding: 10px 16px;
+        font-size: .75rem;
+        font-weight: 700;
+        white-space: nowrap;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        color: var(--text-2);
+        background: none;
+        border-left: none;
+        border-right: none;
+        border-top: none;
+        transition: color .15s, border-color .15s;
+      }
+      .admin-tab.active {
+        color: var(--red);
+        border-bottom-color: var(--red);
+      }
+      /* Analiz sekmesi içi: Funnel üstte, Ürün Pop. + Uyuyan alt panel */
+      .analiz-sub-section {
+        margin-top: 18px;
+        border-top: 1.5px solid var(--border);
+        padding-top: 14px;
+      }
+      .analiz-sub-title {
+        font-size: .68rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .07em;
+        color: var(--text-3);
+        margin-bottom: 10px;
+      }
+      /* Proposals sekmesi içi: arşiv alt panel */
+      .arsiv-sub-section {
+        margin-top: 18px;
+        border-top: 1.5px solid var(--border);
+        padding-top: 14px;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // Admin header'ı güncelle
   const hdrUser = document.getElementById('admin-header-user');
-  if(hdrUser) hdrUser.textContent = currentUser?.Email?.split('@')[0] || '—';
-  if(!isAdmin()) { await ayAlert('Yetkisiz erişim.'); return; }
-  haptic(18);
-  const m=document.getElementById('admin-modal');
-  m.style.display='flex'; m.classList.add('open');
-  renderAdminPanel();
-  // Otomatik yenileme — overview sekmesi açıkken her 60 saniyede bir
-  if(window._adminRefreshTimer) clearInterval(window._adminRefreshTimer);
+  if (hdrUser) {
+    hdrUser.textContent = currentUser?.Email?.split('@')[0] || '—';
+  }
+
+  // İçeriği try-catch ile yükle (hata olsa bile modal açık kalır)
+  try {
+    await renderAdminPanel();
+    console.log("Admin paneli başarıyla yüklendi.");
+  } catch (err) {
+    console.error("Admin Paneli içeriği yüklenirken hata oluştu:", err);
+    const body = document.querySelector('.admin-body');
+    if (body) {
+      body.innerHTML = '<div class="admin-empty" style="color:#dc2626; padding:20px;">⚠️ Admin paneli yüklenirken hata oluştu. Sayfayı yenileyip tekrar deneyin.</div>';
+    }
+  }
+
+  // Otomatik yenileme timer (overview sekmesi için)
+  if (window._adminRefreshTimer) clearInterval(window._adminRefreshTimer);
   window._adminRefreshTimer = setInterval(() => {
     const adminOpen = document.getElementById('admin-modal')?.classList.contains('open');
-    if(!adminOpen) { clearInterval(window._adminRefreshTimer); return; }
+    if (!adminOpen) {
+      clearInterval(window._adminRefreshTimer);
+      return;
+    }
     const activeTab = document.querySelector('.admin-tab.active')?.dataset?.tab;
-    if(activeTab === 'overview' || !activeTab) renderAdminPanel();
+    if (activeTab === 'overview' || !activeTab) {
+      renderAdminPanel().catch(e => console.warn("Auto-refresh hatası:", e));
+    }
   }, 60000);
-}
+};
 function closeAdmin() {
   const m=document.getElementById('admin-modal');
   m.classList.remove('open'); m.style.display='none';
   if(window._adminRefreshTimer) { clearInterval(window._adminRefreshTimer); window._adminRefreshTimer=null; }
 }
 function switchAdminTab(tab) {
+  // ✅ DÜZELTME — 5 sekme yapısı:
+  // 'products' → 'analiz' sekmesinin içindeki alt bölüm olarak açılır
+  // 'arsiv'    → 'proposals' (Teklif) sekmesinin içinde görünür
+  // Eski sekme adı gelirse yönlendir
+  if (tab === 'products') { tab = 'analiz'; }
+  if (tab === 'arsiv')    { tab = 'proposals'; }
+
   document.querySelectorAll('.admin-tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===tab));
   document.querySelectorAll('.admin-tab-content').forEach(c=>c.classList.toggle('active',c.id==='tab-'+tab));
-  if(tab==='proposals') renderProposals(document.getElementById('admin-proposals-list'), true);
-  if(tab==='siparis')   { renderSiparisPanel(); updateSiparisBadge(); }
-  if(tab==='sepetler')  { renderSepetDetay(); }
-  if(tab==='personel')  { renderAdminUsers(); }
-  if (tab === 'funnel') { loadFunnelAnaliz(); }   // ✅ SADECE funnel sekmesi açılınca
-  if(tab==='arsiv')     { renderArchivedProposals(); }
-  if(tab==='products')  {
+  if(tab==='proposals') {
+    renderProposals(document.getElementById('admin-proposals-list'), true);
+    // Arşiv alt panelini de güncelle
+    renderArchivedProposals();
+  }
+  if(tab==='siparis')  { renderSiparisPanel(); updateSiparisBadge(); }
+  if(tab==='sepetler') { renderSepetDetay(); }
+  if(tab==='personel') { renderAdminUsers(); }
+  if(tab==='analiz')   {
+    // Analiz sekmesi: Funnel + Ürün Popülerliği + Uyuyan Stok
+    loadFunnelAnaliz();
     renderAdminProducts();
-    // Uyuyan stok — allProducts her zaman hazır olmalı (loadData çalışmış)
     const urunList = (allProducts&&allProducts.length) ? allProducts
                    : (window._cachedUrunler&&window._cachedUrunler.length) ? window._cachedUrunler
                    : [];
     if(urunList.length) {
       renderUyuyanStok(urunList);
     } else {
-      // Yüklenmemişse fetch et
       const uyuEl = document.getElementById('admin-uyuyan-stok');
       if(uyuEl) uyuEl.innerHTML='<div class="admin-empty">Yükleniyor...</div>';
       fetch(dataUrl('urunler.json')+'?t='+Date.now())
@@ -5278,8 +5751,9 @@ Object.assign(window, {
   closeChangePopup,
   
   // Sepet işlemleri
-  addToBasket, removeFromBasket, clearBasket, fiyatGoster, _fyGos, applyDiscount,
+  addToBasket, removeFromBasket, fiyatGoster, _fyGos, applyDiscount,
   addToBasketPrim, openSiparisNotSafe, _initStockFilterBtn,
+  deleteSelectedItems,   // Toplu silme fonksiyonu
   
   // Teklif işlemleri
   updatePropStatus, resendProposalWa, openPropNote, deleteProp,
@@ -5295,7 +5769,7 @@ Object.assign(window, {
   openSiparisNot, siparisToggle, siparisDelete, clearSiparisNotlari,
   
   // Funnel analiz
-  loadFunnelAnaliz, loadSepetAnaliz,
+  loadFunnelAnaliz, loadSepetAnaliz, setFunnelFilter,
   
   // Canlı sepet
   fetchLiveBasket,
@@ -5308,7 +5782,9 @@ Object.assign(window, {
   logoutUser,
   
   // Premium modal yardımcı
-  closeReasonPanel,  // ✅ YENİ: Neden panelini kapatmak için eklendi
+  closeReasonPanel,
+  showReasonModal,      // Her silme işleminde açılan modal
+  showEmptyCartModal,   // Sepet boşaldığında açılan modal
   
   // Mesajlaşma (aktif değilse boş fonksiyon)
   openMessages: () => {
