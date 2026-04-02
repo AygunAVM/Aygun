@@ -462,15 +462,9 @@
         </button>
       </div>
     </div>
+  </div><!-- /session-result-card -->
+</div><!-- /session-result-modal -->
 
-    <!-- Alt Bilgi -->
-    <div class="session-footer">
-      <span class="session-footer-icon">💡</span>
-      <span class="session-footer-text">Teklif vermek için WA veya PDF kullanın · Sepete dönmek için ✕</span>
-    </div>
-  </div>
-</div>
-  
 <!-- ═══════ KULLANIM KILAVUZU MODAL ═══════ -->
 <div id="welcome-info-modal" class="modal-overlay" style="align-items:center;justify-content:center;">
   <div class="welcome-modal-content">
@@ -561,25 +555,27 @@
       <button class="admin-tab"         data-tab="personel"   onclick="switchAdminTab('personel')">👤 Personel</button>
       <button class="admin-tab"         data-tab="sepetler"   onclick="switchAdminTab('sepetler')">🛒 Sepetler</button>
       <button class="admin-tab"         data-tab="siparis"    onclick="switchAdminTab('siparis')">📦 Sipariş</button>
-      <button class="admin-tab"         data-tab="products"   onclick="switchAdminTab('products')">🏆 Ürün Pop.</button>
-      <button class="admin-tab" data-tab="funnel" onclick="switchAdminTab('funnel')">🎯 Funnel Analiz</button>
-      <button class="admin-tab"         data-tab="arsiv"      onclick="switchAdminTab('arsiv')">📦 Arşiv</button>
+      <button class="admin-tab"         data-tab="analiz"     onclick="switchAdminTab('analiz')">📈 Analiz</button>
     </div>
     <div class="admin-body">
 
-      <!-- SATIŞ HUNİSİ ANALİZİ -->
-      <div class="admin-tab-content" id="tab-funnel">
-        <div class="admin-section">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-            <div class="admin-section-header" style="margin:0">🎯 Satış Hunisi Analizi</div>
-            <button class="btn-reset" onclick="loadFunnelAnaliz()" style="background:var(--black);color:#fff;">🔄 Yenile</button>
-          </div>
-          <p style="font-size:.74rem;color:var(--text-3);margin:0 0 14px">Her müşteri oturumu için sonuç analizi — Satış, Teklif, Kaçan</p>
-          <div id="funnel-analiz-konteynir">
-            <div class="admin-empty">📈 Analizi görmek için <b>Yenile</b> butonuna basın.</div>
-          </div>
-        </div>
-      </div>
+<!-- SATIŞ HUNİSİ ANALİZİ -->
+<div class="admin-tab-content" id="tab-analiz">
+  <div class="admin-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="admin-section-header" style="margin:0">🎯 Satış Hunisi Analizi</div>
+      <button class="btn-reset" onclick="loadFunnelAnaliz(90, true)" style="background:var(--black);color:#fff;">🔄 Yenile</button>
+    </div>
+    <p style="font-size:.74rem;color:var(--text-3);margin:0 0 14px">Her müşteri oturumu için sonuç analizi — Satış, Teklif, Kaçan</p>
+    
+    <!-- ✅ Filtre butonları ARTIK BURADA DEĞİL - loadFunnelAnaliz dinamik olarak oluşturacak -->
+    <!-- Eski butonlar KALDIRILDI, sadece aşağıdaki konteynır kalıyor -->
+    
+    <div id="funnel-analiz-konteynir">
+      <div class="admin-empty">📈 Analizi görmek için <b>Yenile</b> butonuna basın.</div>
+    </div>
+  </div>
+</div>
 
       <!-- ÖZET -->
       <div class="admin-tab-content active" id="tab-overview">
