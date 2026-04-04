@@ -505,7 +505,7 @@ async function showApp() {
   const searchEl = document.getElementById('search');
   if (searchEl) {
     const ad = currentUser?.Ad || currentUser?.Email?.split('@')[0] || '';
-    searchEl.placeholder = ad ? 'Nisan Yıldızısın, ' + ad + ' — Ürün arama' : 'Ürün arama';
+    searchEl.placeholder = ad ? 'Şampiyonsun, ' + ad + ' — Ürün arama' : 'Ürün arama';
   }
   // Motd ticker'ı başlat (mesaj yoksa statik kalır)
   _startMotdTicker();
@@ -525,7 +525,7 @@ function _startMotdTicker() {
   if (!searchEl) return;
 
   const ad = currentUser?.Ad || currentUser?.Email?.split('@')[0] || '';
-  const staticPlaceholder = ad ? 'Nisan Yıldızı, ' + ad + ' — Ürün arama' : 'Ürün arama';
+  const staticPlaceholder = ad ? 'Şampiyonsun, ' + ad + ' — Ürün arama' : 'Ürün arama';
 
   // Önce statik placeholder'ı set et
   searchEl.placeholder = staticPlaceholder;
@@ -4070,15 +4070,23 @@ async function logSessionResult(sonuc, neden) {
       // Gam bazlı özet { 'Klima': { sorulan:3, alinan:1 }, ... }
       gamAnaliz: (() => {
         const map = {};
-        // Tüm fiyatı sorulanlara bak
+        const urunler = window._cachedUrunler || allProducts || [];
+        
+        // Ürün adı → gam haritası (norm() ile Türkçe uyumlu key tespiti)
+        const _gamHarita = {};
+        urunler.forEach(p => {
+          const keys = Object.keys(p);
+          // 'Ürün' key'ini norm() ile bul (Türkçe karakter güvenli)
+          const uKey = keys.find(k => norm(k) === 'urun');
+          // 'Gam' key'ini bul
+          const gKey = keys.find(k => k.toLowerCase().includes('gam'));
+          if (uKey && p[uKey]) {
+            _gamHarita[p[uKey]] = (gKey && p[gKey] && p[gKey] !== '-') ? p[gKey] : null;
+          }
+        });
+
         (_sessionData.revealedPrices || []).forEach(urunAdi => {
-          // allProducts'tan gam bilgisini bul
-          const urunObj = (window._cachedUrunler || allProducts || []).find(p => {
-            const k = Object.keys(p).find(k => k.toLowerCase().replace(/[^a-z]/g,'') === 'urun');
-            return k && p[k] === urunAdi;
-          });
-          const gKey = Object.keys(urunObj || {}).find(k => k.toLowerCase().includes('gam'));
-          const gam  = (urunObj && gKey) ? (urunObj[gKey] || 'Bilinmiyor') : 'Bilinmiyor';
+          const gam = _gamHarita[urunAdi] || 'Gam Yok';
           if (!map[gam]) map[gam] = { sorulan: 0, alinan: 0 };
           map[gam].sorulan++;
           if (basket.some(b => b.urun === urunAdi)) map[gam].alinan++;
@@ -4412,13 +4420,33 @@ async function loadFunnelAnaliz(gunAralik = 90, force = false) {
       .sort((a,b) => b[1]-a[1]).slice(0,3);
 
     // ── Gam Bazlı Analiz ──────────────────────────────────────
-    // 1. allProducts'tan urun→gam haritası oluştur
+    // 1. urun→gam haritası — norm() ile Türkçe karakter güvenli
+    // Ürünler yüklü değilse önce yükle
+    let _urunlerForGam = window._cachedUrunler || allProducts || [];
+    if (!_urunlerForGam.length) {
+      try {
+        const _r = await fetch(dataUrl('urunler.json') + '?gam=' + Date.now());
+        const _j = safeJSON(await _r.text());
+        _urunlerForGam = Array.isArray(_j.data) ? _j.data : (Array.isArray(_j) ? _j : []);
+        window._cachedUrunler = _urunlerForGam;
+        if (!allProducts.length) allProducts = _urunlerForGam;
+      } catch(e) { console.warn('Gam analiz için ürün yüklenemedi:', e); }
+    }
+
     const urunGamMap = {};
-    (window._cachedUrunler || allProducts || []).forEach(p => {
-      const uKey = Object.keys(p).find(k => k.toLowerCase().replace(/[^a-z]/g,'') === 'urun');
-      const gKey = Object.keys(p).find(k => k.toLowerCase().includes('gam'));
-      if (uKey && gKey && p[uKey]) urunGamMap[p[uKey]] = p[gKey] || 'Bilinmiyor';
+    _urunlerForGam.forEach(p => {
+      const keys = Object.keys(p);
+      // norm() kullan — 'Ürün' → 'urun' (Türkçe ü sorunu çözülür)
+      const uKey = keys.find(k => norm(k) === 'urun');
+      // Gam key — 'Gam', 'GAM', 'gam' hepsini yakalar
+      const gKey = keys.find(k => k.toLowerCase().includes('gam'));
+      if (uKey && p[uKey]) {
+        const gamVal = gKey ? (p[gKey] || '') : '';
+        urunGamMap[p[uKey]] = (gamVal && gamVal !== '-') ? gamVal : null;
+      }
     });
+    console.log('🗺 urunGamMap:', Object.keys(urunGamMap).length, 'ürün eşlendi,',
+      Object.values(urunGamMap).filter(Boolean).length, 'gamı var');
 
     // 2. Her log'dan gamAnaliz alanını topla
     const gamToplam = {}; // { gam: { sorulan, alinan } }
@@ -4432,9 +4460,12 @@ async function loadFunnelAnaliz(gunAralik = 90, force = false) {
           gamToplam[gam].alinan  += (v.alinan  || 0);
         });
       } else {
-        // Eski log kaydı — geriye dönük uyumluluk
+        // Eski log kaydı — geriye dönük uyumluluk (gamAnaliz alanı yok)
         (log.bakilanFiyatlar || []).forEach(u => {
-          const gam = urunGamMap[u] || 'Bilinmiyor';
+          // urunGamMap'te null ise 'Gam Yok', map'te hiç yoksa 'Bilinmiyor'
+          const gam = u in urunGamMap
+            ? (urunGamMap[u] || 'Gam Yok')
+            : 'Bilinmiyor';
           if (!gamToplam[gam]) gamToplam[gam] = { sorulan: 0, alinan: 0 };
           gamToplam[gam].sorulan++;
           if ((log.urunler || []).some(b => b.urun === u)) gamToplam[gam].alinan++;
@@ -4447,16 +4478,23 @@ async function loadFunnelAnaliz(gunAralik = 90, force = false) {
       .filter(([, v]) => v.sorulan > 0)
       .map(([gam, v]) => ({
         gam,
-        sorulan: v.sorulan,
-        alinan:  v.alinan,
+        sorulan:   v.sorulan,
+        alinan:    v.alinan,
         kacirilan: v.sorulan - v.alinan,
-        donusum: v.sorulan === 0 ? 0 : Math.round((v.alinan / v.sorulan) * 100)
+        donusum:   v.sorulan === 0 ? 0 : Math.round((v.alinan / v.sorulan) * 100),
+        bilinmiyor: gam === 'Bilinmiyor' || gam === 'Gam Yok'
       }))
-      .sort((a, b) => b.kacirilan - a.kacirilan); // En çok kaçırılan üste
+      .sort((a, b) => b.kacirilan - a.kacirilan);
 
-    // 4. En iyi / en kötü dönüşüm gamlar
-    const gamEnIyi  = [...gamSirali].sort((a,b) => b.donusum - a.donusum).slice(0, 3);
-    const gamEnKotu = gamSirali.slice(0, 3); // zaten kacirilan'a göre sıralı
+    // 4. En iyi/kötü: sadece gerçek gam adı olanlar (Bilinmiyor/Gam Yok hariç)
+    const gamGercek = gamSirali.filter(g => !g.bilinmiyor);
+    const gamEnIyi  = [...gamGercek].sort((a,b) => b.donusum - a.donusum).slice(0, 3);
+    const gamEnKotu = gamGercek.slice(0, 3);
+
+    // Debug — geliştirme kolaylığı için
+    console.log('📊 Gam analiz:', gamSirali.length, 'gam,', 
+      gamGercek.length, 'gerçek gam,',
+      Object.keys(urunGamMap).length, 'ürün map'te');
 
 // ── PERSONEL İSTATİSTİKLERİ ──────────────────────────────
 const pMap = {};
@@ -4646,20 +4684,26 @@ logs.forEach(l => {
         <div style="display:grid;grid-template-columns:1fr 60px 60px 60px 60px;gap:4px;padding:4px 6px;background:#e2e8f0;border-radius:6px;font-size:.58rem;font-weight:800;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
           <span>Gam</span><span style="text-align:center">Soruldu</span><span style="text-align:center">Alındı</span><span style="text-align:center">Kaçtı</span><span style="text-align:center">Dönüşüm</span>
         </div>
-        ${gamSirali.slice(0,8).map(g => {
-          const barW = Math.max(4, g.donusum);
-          const barCol = g.donusum >= 60 ? '#16a34a' : g.donusum >= 30 ? '#f59e0b' : '#dc2626';
-          return `<div style="display:grid;grid-template-columns:1fr 60px 60px 60px 60px;gap:4px;padding:5px 6px;border-bottom:1px solid #f1f5f9;align-items:center">
+        ${gamSirali.slice(0,10).map(g => {
+          const barW  = Math.max(4, g.donusum);
+          const barCol = g.bilinmiyor ? '#94a3b8'
+                       : g.donusum >= 60 ? '#16a34a'
+                       : g.donusum >= 30 ? '#f59e0b' : '#dc2626';
+          const rowBg = g.bilinmiyor ? '#f8fafc' : 'transparent';
+          const gamLabel = g.bilinmiyor
+            ? `<span style="color:#94a3b8;font-style:italic">${g.gam}</span>`
+            : `<span style="font-weight:700;color:#1e293b">${g.gam}</span>`;
+          return `<div style="display:grid;grid-template-columns:1fr 60px 60px 60px 60px;gap:4px;padding:5px 6px;border-bottom:1px solid #f1f5f9;align-items:center;background:${rowBg}">
             <div>
-              <div style="font-size:.72rem;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${g.gam}</div>
+              <div style="font-size:.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${gamLabel}</div>
               <div style="height:3px;border-radius:2px;background:#f1f5f9;margin-top:3px;overflow:hidden">
-                <div style="width:${barW}%;height:100%;background:${barCol};border-radius:2px;transition:width .3s"></div>
+                <div style="width:${barW}%;height:100%;background:${barCol};border-radius:2px"></div>
               </div>
             </div>
             <span style="text-align:center;font-size:.70rem;font-weight:700;color:#334155">${g.sorulan}</span>
             <span style="text-align:center;font-size:.70rem;font-weight:700;color:#16a34a">${g.alinan}</span>
             <span style="text-align:center;font-size:.70rem;font-weight:700;color:#dc2626">${g.kacirilan}</span>
-            <span style="text-align:center;font-size:.70rem;font-weight:800;color:${barCol}">${g.donusum}%</span>
+            <span style="text-align:center;font-size:.70rem;font-weight:800;color:${barCol}">${g.bilinmiyor ? '—' : g.donusum+'%'}</span>
           </div>`;
         }).join('')}
         <!-- En iyi / en kötü özet -->
