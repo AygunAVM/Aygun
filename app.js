@@ -664,7 +664,7 @@ async function showApp() {
   const searchEl = document.getElementById('search');
   if (searchEl) {
     const ad = currentUser?.Ad || currentUser?.Email?.split('@')[0] || '';
-    searchEl.placeholder = ad ? 'Şampiyonsun, ' + ad + ' — Ürün arama' : 'Ürün arama';
+    searchEl.placeholder = ad ? 'En iyisiniz, ' + ad + ' — Ürün arama' : 'Ürün arama';
   }
   // Motd ticker'ı başlat (mesaj yoksa statik kalır)
   _startMotdTicker();
