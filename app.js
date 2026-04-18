@@ -722,7 +722,7 @@ function _startMotdTicker() {
   if (!searchEl) return;
 
   const ad = currentUser?.Ad || currentUser?.Email?.split('@')[0] || '';
-  const staticPlaceholder = ad ? 'Artık çok daha akıllıyım, ' + ad + ' — Ürün arama' : 'Ürün arama';
+  const staticPlaceholder = ad ? 'Şampiyonsun, ' + ad + ' — Ürün arama' : 'Ürün arama';
 
   // Önce statik placeholder'ı set et
   searchEl.placeholder = staticPlaceholder;
@@ -9080,7 +9080,7 @@ function optimizeCampaigns() {
 
   const toplamDisc = basket.reduce((t,i) => t+(i._campDisc||0), 0);
   const fmtD = toplamDisc>=1000 ? (toplamDisc/1000).toFixed(toplamDisc%1000===0?0:1)+'k' : toplamDisc;
-  _campToast('✨ Kombinasyon seçildi — '+fmtD+'₺ kampanya indirimi', 'ok');
+  _campToast('✨ En iyi kombinasyon seçildi — '+fmtD+'₺ kampanya indirimi', 'ok');
   haptic(30);
 }
 
