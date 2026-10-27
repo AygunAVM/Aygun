@@ -2,13 +2,20 @@
 //  AYGÜN AVM — Service Worker  (Auto-versioning edition)
 // ═══════════════════════════════════════════════════════════
 
-const CACHE_VERSION = 'V9.1-20260808-0939'; // Rev 9.1 — kampanya recalculate + tanımsız fonksiyon/ölü kod düzeltmeleri (bkz. app.js)
+const CACHE_VERSION = 'V11.31-20261026-2101'; // Rev 11.2 — sevkiyat modülleri (veri/kamera/belge/stil)
 const STATIC_CACHE  = 'aygun-static-' + CACHE_VERSION;
 const APP_FILES = [
   './',
   './index.html',
   './style.css',
   './app.js',
+  './sevkiyat.js',
+  './sevkiyat-veri.js',
+  './sevkiyat-kamera.js',
+  './sevkiyat-belge.js',
+  './sevkiyat-stil.js',
+  './sevkiyat-magaza.js',
+  './sevkiyat-talep.js',
   './manifest.json',
   './version.json',
   './logo.png'
@@ -68,7 +75,8 @@ self.addEventListener('fetch', e => {
   // 3. /data/ JSON — her zaman ağdan (fiyat/stok değişkendir)
   if (url.pathname.includes('/data/')) {
     e.respondWith(
-      fetch(e.request, { cache: 'no-store' })
+      // V11.21: 'no-cache' = her seferinde sunucuya sor ama değişmediyse 304 (gövde inmez); eskiden 'no-store' her seferinde tam indiriyordu
+      fetch(e.request, { cache: 'no-cache' })
         .then(resp => { safeCachePut(STATIC_CACHE, e.request, resp); return resp; })
         .catch(() => caches.match(e.request))
     );
@@ -78,6 +86,7 @@ self.addEventListener('fetch', e => {
   // 4. app.js / style.css / index.html / version.json — network-first
   if (
     url.pathname.endsWith('app.js') ||
+    /\/sevkiyat[a-z-]*\.js$/.test(url.pathname) || // sevkiyat.js + sevkiyat-veri/kamera/belge.js
     url.pathname.endsWith('style.css') ||
     url.pathname.endsWith('index.html') ||
     url.pathname.endsWith('version.json') ||
