@@ -57,15 +57,15 @@
 // ═══════════════════════════════════════════════════════════════
 import {
   SERVISLER, DEPOLAR, SAAT_DILIMLERI, saatSira, SATIS_NOKTALARI, tanimYukle, tanimKaydet, tanimDegisti, tanimTemizle, kalemDepoEksik, aralikListeyeYukle, musteriSorgula, DURUMLAR, FILTRELER, B, esc, bugun, yarin, tarihTR, zamanTR, tl,
-  eposta, yonetici, depoYetkili, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
+  eposta, yonetici, depoYetkili, seriYetkili, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
   state, kancalar, seriState, seriYukle, seriDogrula, seriSahibi, kalemSerisiz, bilinenOgren, durumEtiket, normSeri, cikisDurumu, tekYenile,
   yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle
-} from './sevkiyat-veri.js?v=V11.31-20261026-2101';
-import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji } from './sevkiyat-belge.js?v=V11.31-20261026-2101';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.31-20261026-2101';
-import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.31-20261026-2101';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.31-20261026-2101';
-import * as Talep from './sevkiyat-talep.js?v=V11.31-20261026-2101';
+} from './sevkiyat-veri.js?v=V11.32-20261027-1209';
+import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji } from './sevkiyat-belge.js?v=V11.32-20261027-1209';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.32-20261027-1209';
+import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.32-20261027-1209';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.32-20261027-1209';
+import * as Talep from './sevkiyat-talep.js?v=V11.32-20261027-1209';
 
 const $ = id => document.getElementById(id);
 const SAYIM_MS = 4 * 60 * 1000;
@@ -660,8 +660,9 @@ function detayHtml(s) {
   const G = gruplar(s), karma = G.length > 1, hepsiT = hepsiTeslim(s);
   const duz = depoYetkili() && !s.kapali;
   const pln = !s.kapali;                                   // V11.14: teslim şekli / tarih / servis / not — satış personeli dahil herkes planlayabilir (depo işlemleri duz ile kalır)
-  const kgir = x => duz && !kalemKilitli(s, x);          // seri / ürün değişikliği, ürünün TESLİM GRUBU teslim edilene kadar serbest
-  const girilebilir = duz && !hepsiT;
+  const sgir = seriYetkili(s) && !s.kapali;                // V11.32: seri / ürün değiştir / ürün ekle — depo + kendi satışındaki satış personeli
+  const kgir = x => sgir && !kalemKilitli(s, x);          // seri / ürün değişikliği, ürünün TESLİM GRUBU teslim edilene kadar serbest
+  const girilebilir = sgir && !hepsiT;
   const tam = k.filter(kalemTamam).length, sy = seriSayim(k);
   const hepsiTam = k.length > 0 && tam === k.length;
   const gec = gecikmeGun(s);
@@ -1100,7 +1101,7 @@ async function tikla(e) {
   if (act === 'wa') return waAc(s);
   if (act === 'watesl') return waTeslimAc(s);
   if (act === 'imzatemizle') { taslakSifirla(null, el.dataset.g); return yenidenCiz(); }
-  if (!depoYetkili() && act !== 'kalemtur' && act !== 'kalemsrv') return;
+  if (!depoYetkili() && act !== 'kalemtur' && act !== 'kalemsrv' && !(seriYetkili(s) && (act === 'tara' || act === 'kalemekle' || act === 'kalemdeg'))) return;   // V11.32: satış personeli kendi satışında yalnız seri okut / ürün ekle / ürün değiştir
   if (act === 'tara') return taraBaslat();
 
   if (act === 'kalemtur') {
@@ -1467,7 +1468,7 @@ async function degisti(e) {
   if (t.classList.contains('svk-sec') && s) { const tur = t.dataset.g === 'musteri' ? 'musteri' : 'servis', n = Number(t.dataset.n); if (t.checked) taslak.g[tur].hayir.delete(n); else taslak.g[tur].hayir.add(n); return yenidenCiz(); }
   if (s && !s.kapali && t.classList.contains('svk-depo')) return depoDegisti(s, t);
   const planAlani = ['svk-d-not', 'svk-d-servis', 'svk-d-tarih', 'svk-d-saat', 'svk-d-nokta'].includes(t.id);
-  if (!s || s.kapali || (!depoYetkili() && !planAlani)) return;
+  if (!s || s.kapali || (!depoYetkili() && !planAlani && !(t.classList.contains('svk-seri') && seriYetkili(s)))) return;
   if (t.classList.contains('svk-seri')) {
     const n = t.dataset.n, val = t.value.trim();
     const once = String((s.kalemler[n] || {}).seriNo || '').trim();

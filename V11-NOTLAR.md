@@ -246,3 +246,12 @@ Seri girişi: +1 okuma +1–2 yazma. Kilit/teslim/iptal: +1 okuma. Sayaç: 4 dk'
 - **Kural B (`firestore-kurallari-ASAMA-B.rules`):** girişsiz erişim yok; giriş+profil olan herkes okur/yazar; yönetici: kullanıcı profilleri, talep silme, sevkiyat tanımları, vitrin, kayan yazı.
 - **Betikler:** `yedek-al.js` (Firestore yedeği), `kullanici-esitle.js --tumunu-sifirla`. Kılavuz: `GECIS-KILAVUZU-V11.31.md`.
 - Test: sevkiyat/talep testleri + eslint. Giriş ve kurallar gerçek Firebase gerektirdiği için canlıda doğrulanacak.
+
+## V11.32 — Satış personeli kendi satışında seri girer / ürün değiştirir / ürün ekler
+- Neden: mağazadan teslimat yapan satış personeli seri girebilmeli (V11.31 sonrası yalnız admin+destek girebiliyordu; bu tasarım gereğiydi).
+- `sevkiyat-veri.js`: yeni `seriYetkili(s)` = `depoYetkili()` VEYA (rol `satis` ve `s.satici` == kendi e-postası). `depoYetkili` değişmedi.
+- `sevkiyat.js`: `sgir = seriYetkili(s) && !s.kapali` → `kgir` (seri girişi / ürün değiştir) ve `girilebilir` (ürün ekle) artık `sgir`'e bağlı; tıklama korumasında satış için yalnız `tara`, `kalemekle`, `kalemdeg` geçer; seri kutusu `change` olayı da `seriYetkili`ye açık.
+- Satış için KAPALI kalanlar (`duz` = depoYetkili): teslim, tahsilat, iade, satırı çıkar, otomatik kapanış, talep hazırlama, "Seri gerekmez yap" (yalnız admin).
+- Firestore Kural B zaten sevkiyatlar/seriKullanim yazımına profili olan herkese izin veriyor; kural değişikliği gerekmedi. Satış personeli yalnız kendi satışlarını listede görür (`satici`), başkasının satışında yetki yok.
+- Test: eslint no-undef temiz, `test/run.js` 10/10, `seriYetkili` birim testi (kendi/başkası/saticisiz/destek/admin/boş rol) geçti. Ekran düzeyinde canlı doğrulama bekliyor.
+- Değişen dosyalar: app.js, index.html, service-worker.js, version.json, sevkiyat.js, sevkiyat-veri.js, sevkiyat-belge.js, sevkiyat-magaza.js, sevkiyat-talep.js (sürüm damgası).
