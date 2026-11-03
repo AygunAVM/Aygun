@@ -57,15 +57,15 @@
 // ═══════════════════════════════════════════════════════════════
 import {
   SERVISLER, DEPOLAR, SAAT_DILIMLERI, saatSira, SATIS_NOKTALARI, tanimYukle, tanimKaydet, tanimDegisti, tanimTemizle, kalemDepoEksik, aralikListeyeYukle, musteriSorgula, DURUMLAR, FILTRELER, B, esc, bugun, yarin, tarihTR, zamanTR, tl,
-  eposta, yonetici, depoYetkili, seriYetkili, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
+  eposta, yonetici, depoYetkili, seriYetkili, kodAnahtar, kodEs, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
   state, kancalar, seriState, seriYukle, seriDogrula, seriSahibi, kalemSerisiz, bilinenOgren, durumEtiket, normSeri, cikisDurumu, tekYenile,
   yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi
-} from './sevkiyat-veri.js?v=V11.40-20261102-1031';
-import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.40-20261102-1031';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.40-20261102-1031';
-import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.40-20261102-1031';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.40-20261102-1031';
-import * as Talep from './sevkiyat-talep.js?v=V11.40-20261102-1031';
+} from './sevkiyat-veri.js?v=V11.41-20261103-0250';
+import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.41-20261103-0250';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.41-20261103-0250';
+import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.41-20261103-0250';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.41-20261103-0250';
+import * as Talep from './sevkiyat-talep.js?v=V11.41-20261103-0250';
 
 const $ = id => document.getElementById(id);
 const SAYIM_MS = 4 * 60 * 1000;
@@ -699,7 +699,7 @@ function detayHtml(s) {
 
   // — Ürünler (seri zorunluluğu seriler.json'daki Stok Kodu'na göre)
   const kalemHtml = k.map(x => {
-    const gerek = !kalemSerisiz(x), stokYok = gerek && !(x.seriNo && String(x.seriNo).trim()) && seriState.kodlar && !seriState.kodlar.has(String(x.kod).trim());
+    const gerek = !kalemSerisiz(x), stokYok = gerek && !(x.seriNo && String(x.seriNo).trim()) && seriState.kodlar && !seriState.kodlar.has(String(x.kod).trim()) && !seriState.kodlar.has(kodAnahtar(x.kod));
     const ipucu = !gerek
       ? '<div class="svk-ipucu nt">' + ic('info', 14) + '<span>' + (x.seriGerekliDegil ? 'Yönetici “seri gerekmez” olarak işaretledi' + (x.seriGerekliDegil.neden ? ': ' + esc(x.seriGerekliDegil.neden) : '') + '.' : 'Bu ürün stok listesinde (seriler.json) seri takipli değil — seri girişi gerekmez.') + '</span></div>'
       : (stokYok ? '<div class="svk-ipucu nt">' + ic('alert', 14) + '<span>Bu ürün seri takipli ancak stokta seri görünmüyor — stok girişi yapılınca seri okutulabilir; seri girilmeden teslim edilemez.' +
@@ -976,11 +976,11 @@ async function seriKodIsle(kod, ctx) {
   const zaten = kl.find(k => k.seriNo && normSeri(k.seriNo) === normSeri(val));
   if (zaten) return red({ tur: 'ayni_sevkiyat', detay: { seri: val, n: zaten.n } });
   const bos = k => !(k.seriNo && String(k.seriNo).trim()) && !kalemKilitli(s, k);   // teslim edilmiş grubun satırı hedef olmaz
-  if (ctx && String(bilgi.kod) !== String(ctx.hedefKod)) {
+  if (ctx && !kodEs(bilgi.kod, ctx.hedefKod)) {
     return red({ tur: 'yanlis', detay: { seri: val, bulunanKod: bilgi.kod, bulunanAd: B().urunAdi(bilgi.kod), beklenenKod: String(ctx.hedefKod), beklenenAd: B().urunAdi(ctx.hedefKod) } });
   }
   const ilkSatir = ctx && !ctx.ilkTamam ? kl.find(k => String(k.n) === String(ctx.ilkN)) : null;
-  const hedef = ilkSatir || kl.find(k => bos(k) && String(k.kod) === String(bilgi.kod));
+  const hedef = ilkSatir || kl.find(k => bos(k) && kodEs(k.kod, bilgi.kod));
   if (!hedef) return red({ tur: 'eslesme_yok', detay: { seri: val, bulunanKod: bilgi.kod, bulunanAd: B().urunAdi(bilgi.kod) } });
   const degistirme = !!ilkSatir && !bos(ilkSatir);
   const r = await seriKaydet(s, hedef.n, val);
@@ -988,7 +988,7 @@ async function seriKodIsle(kod, ctx) {
   if (!r.ok) return red(r.hata);
   if (ctx && ilkSatir) ctx.ilkTamam = true;
   if (s) detayCiz(s);
-  const kalanKod = s ? kalemListe(s).filter(k => bos(k) && String(k.kod) === String(bilgi.kod)).length : 0;
+  const kalanKod = s ? kalemListe(s).filter(k => bos(k) && kodEs(k.kod, bilgi.kod)).length : 0;
   const bitti = !s || (ctx ? (degistirme || kalanKod === 0) : kalemListe(s).every(kalemTamam));
   return { ok: true, mesaj: (hedef.n + 1) + '. ' + hedef.urun + ' → ' + val, bitti, siradaki: s ? (ctx ? (kalanKod ? 'Aynı üründen ' + kalanKod + ' adet daha' : 'Bu ürün tamam') : siradakiMetin(s)) : '' };
 }
@@ -1000,7 +1000,7 @@ function taraBaslat(n) {
     const g = aktif() || s;
     if (!ctx) return siradakiMetin(g);
     const k = (g.kalemler || {})[ctx.ilkN];
-    const bos = kalemListe(g).filter(x => String(x.kod) === ctx.hedefKod && !(x.seriNo && String(x.seriNo).trim())).length;
+    const bos = kalemListe(g).filter(x => kodEs(x.kod, ctx.hedefKod) && !(x.seriNo && String(x.seriNo).trim())).length;
     return (k ? k.urun : 'Ürün') + (bos > 1 ? ' · ' + bos + ' adet' : '');
   };
   kameraTara({
