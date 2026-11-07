@@ -162,7 +162,10 @@ export const yonetici = () => rol() === 'admin';
 export const depoYetkili = () => rol() === 'admin' || rol() === 'destek';
 // V11.32: mağazadan teslimat yapan satış personeli KENDİ satışında seri girer, ürün değiştirir ve ürün ekler.
 // Teslim, tahsilat, iade, satır çıkarma ve seri kilidi/yönetici işlemleri depoYetkili'de kalır.
-export const seriYetkili = s => depoYetkili() || (rol() === 'satis' && !!s && !!eposta() && String(s.satici || '').toLowerCase() === eposta().toLowerCase());
+// V11.49: satış personeli, KENDİ satışında her zaman; BAŞKASININ satışında yalnız satışın yapıldığı GÜN (takvim günü) içinde, teslimden önceki süreçleri yapabilir.
+// Ertesi günden itibaren yalnız satışı yapan + destek + yönetici. (Yalnız istemci tarafı kuralıdır.)
+export const ayniGunSatis = s => { const t = Number(s && s.ts); if (!t) return false; const a = new Date(t), b = new Date(); return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); };
+export const seriYetkili = s => depoYetkili() || (rol() === 'satis' && !!s && !!eposta() && (String(s.satici || '').toLowerCase() === eposta().toLowerCase() || ayniGunSatis(s)));
 
 // V11.37: yönetici dışı kullanıcıda kimlik / e-posta maskeli görünür (kopyala düğmesi tam bilgiyi bir kez verir)
 export const maskeKimlik = k => {
@@ -178,7 +181,7 @@ export const maskeEposta = e => {
   return yerel.slice(0, 1) + '*'.repeat(Math.max(2, Math.min(yerel.length - 1, 6))) + alan;
 };
 // V11.37: satışı yapan personelin görünen adı (yeni kayıtlarda saticiAd; eski kayıtlarda e-postanın @ öncesi)
-export const saticiAdi = s => String((s && s.saticiAd) || '').trim() || String((s && s.satici) || '').split('@')[0];
+export const saticiAdi = s => String((s && s.saticiAd) || '').trim() || (String((s && s.satici) || '').trim() === '-' ? '' : String((s && s.satici) || '').split('@')[0]);   // V11.53: '-' = e-posta kaydedilememiş eski satış
 
 // Kalemler map olarak saklanır ({"0":{...}}) → noktalı yol güncellemesi (kalemler.0.seriNo)
 export const kalemListe = s => Object.keys(s.kalemler || {}).sort((a, b) => a - b)
@@ -359,8 +362,8 @@ export function seriDogrula(seri, kod) {
 export async function yukle(force) {
   const b = B();
   const c = b.collection(b.db, COL);
-  // Rev 11.10: satış personeli de TÜM açık sevkiyatları görür (müşteriye süreç bilgisi verebilmek için); önbellek süresi 5 dk
-  if (!force && Date.now() - state.aktifTs < (depoYetkili() ? TTL_MS : 5 * TTL_MS)) return;
+  // Rev 11.10: satış personeli de TÜM açık sevkiyatları görür. V11.49: önbellek herkes için 60 sn (eskiden personelde 5 dk: yeni satış geç görünüyordu)
+  if (!force && Date.now() - state.aktifTs < TTL_MS) return;
   const snap = await b.getDocs(b.query(c, b.where('kapali', '==', false), b.limit(300)));
   for (const [k, v] of state.list) if (!v.kapali) state.list.delete(k);
   snap.docs.forEach(d => { const v = d.data(); if (!v.silindi) state.list.set(d.id, { ...v, saleNo: d.id }); });
@@ -740,7 +743,7 @@ export async function iceAktarPlan(satirlar) {
   const kullanilanId = new Set(hedefler.filter(g => g.id).map(g => g.id));
   for (const g of hedefler) {
     if (g.id && !g.hatalar.some(h => h.includes('Satış No geçersiz'))) {
-      try { const sn = await b.getDoc(b.doc(b.db, COL, g.id)); if (sn.exists()) g.hatalar.push('Bu Satış No sistemde zaten kayıtlı (' + g.id + ') — atlanır; üzerine yazılmaz'); } catch (e) { g.hatalar.push('Satış No denetlenemedi: ' + (e.message || e)); }
+      try { const sn = await okuDene(() => b.getDoc(b.doc(b.db, COL, g.id))); if (sn.exists()) g.hatalar.push('Bu Satış No sistemde zaten kayıtlı (' + g.id + ') — atlanır; üzerine yazılmaz'); } catch (e) { g.hatalar.push('Satış No denetlenemedi (internet / sunucu bağlantısı yok; bağlantıyı kontrol edip dosyayı yeniden seçin): ' + (e.message || e)); }
     }
   }
   let sayac = 0; const gunKod = bugunIso.slice(2).replace(/-/g, '');
@@ -749,7 +752,7 @@ export async function iceAktarPlan(satirlar) {
     for (;;) {
       sayac++; const id = 'ICE-' + gunKod + '-' + String(sayac).padStart(3, '0');
       if (kullanilanId.has(id)) continue;
-      let var_ = false; try { var_ = (await b.getDoc(b.doc(b.db, COL, id))).exists(); } catch (_e) { var_ = false; }
+      let var_ = false; try { var_ = (await okuDene(() => b.getDoc(b.doc(b.db, COL, id)))).exists(); } catch (e) { g.hatalar.push('Otomatik Satış No denetlenemedi (bağlantı yok): ' + (e.message || e)); }
       if (!var_) { g.id = id; kullanilanId.add(id); break; }
     }
     uretim++;
@@ -759,12 +762,24 @@ export async function iceAktarPlan(satirlar) {
     for (const k of g.kalemler) {
       if (!k.seri) continue;
       try {
-        const sn = await b.getDoc(b.doc(b.db, SERI_COL, seriDocId(k.seri)));
+        const sn = await okuDene(() => b.getDoc(b.doc(b.db, SERI_COL, seriDocId(k.seri))));
         if (sn.exists() && sn.data().saleNo !== g.id) g.hatalar.push('Satır ' + k.no + ': ' + k.seri + ' seri numarası başka sevkiyatta kullanılmış (' + sn.data().saleNo + (sn.data().musteri ? ' · ' + sn.data().musteri : '') + ')');
       } catch (e) { g.hatalar.push('Satır ' + k.no + ': seri kilidi denetlenemedi (' + (e.message || e) + ')'); }
     }
   }
   return { gruplar: hedefler, uretim };
+}
+// Firestore "client is offline" / "unavailable": bağlantı henüz kurulmamış olabilir → kısa aralıklarla yeniden dener (yalnız okuma için)
+async function okuDene(fn) {
+  let son;
+  for (let i = 0; i < 4; i++) {
+    try { return await fn(); } catch (e) {
+      son = e;
+      if (!/offline|unavailable/i.test(String((e && (e.code || '')) + ' ' + (e && e.message)))) throw e;
+      await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  throw son;
 }
 const k2 = (r, kolon, k) => (k in kolon ? r[kolon[k]] : '');
 // Plan → yazma. Her satış kendi transaction'ında yazılır (kayıt + seri kilitleri birlikte); biri başarısız olursa diğerleri etkilenmez.

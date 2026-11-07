@@ -60,12 +60,12 @@ import {
   eposta, yonetici, depoYetkili, seriYetkili, kodAnahtar, kodEs, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
   state, kancalar, seriState, seriYukle, seriDogrula, seriSahibi, kalemSerisiz, bilinenOgren, durumEtiket, normSeri, cikisDurumu, tekYenile,
   yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi, csvAyristir, iceAktarPlan, iceAktarYaz
-} from './sevkiyat-veri.js?v=V11.43-20261103-1328';
-import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.43-20261103-1328';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.43-20261103-1328';
-import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.43-20261103-1328';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.43-20261103-1328';
-import * as Talep from './sevkiyat-talep.js?v=V11.43-20261103-1328';
+} from './sevkiyat-veri.js?v=V11.53-20261107-0232';
+import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.53-20261107-0232';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.53-20261107-0232';
+import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.53-20261107-0232';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.53-20261107-0232';
+import * as Talep from './sevkiyat-talep.js?v=V11.53-20261107-0232';
 
 const $ = id => document.getElementById(id);
 const SAYIM_MS = 4 * 60 * 1000;
@@ -76,7 +76,7 @@ const LOG_AD = {
   servise_teslim: 'Teslim edildi', kalem_teslim_sekli: 'Ürünün teslim şekli değişti', kalem_servis: 'Götüren servis seçildi', teslim_edildi: 'Çıkış doğrulandı · tamamlandı', teslim_geri_alindi: 'Teslim geri alındı',
   kalem_eklendi: 'Ürün eklendi', kalem_degisti: 'Ürün değiştirildi', kalem_cikarildi: 'Ürün satırı çıkarıldı', iade: 'İade / depoya döndü', not_degisti: 'Not güncellendi', iptal: 'İptal edildi', iptal_geri_alindi: 'İptal geri alındı',
   silindi: 'Kayıt silindi', servis_atandi: 'Servis atandı', teslim_turu_degisti: 'Teslim şekli değişti', teslimat_degisti: 'Teslimat tarihi değişti',
-  tahsilat_alindi: 'Tahsilat alındı', seri_iade: 'Seri iade edildi / stokta yeniden göründü', seri_gerekmez: 'Yönetici: seri gerekmez', depo_degisti: 'Ürün deposu değişti', toplu_depo: 'Yönetici: toplu depo değişimi', toplu_servis: 'Yönetici: toplu servis değişimi', musteri_kopyalandi: 'Müşteri bilgisi kopyalandı', toplu_ice_aktarma: 'Yönetici: toplu içe aktarma (CSV)'
+  tahsilat_alindi: 'Tahsilat alındı', seri_iade: 'Seri iade edildi / stokta yeniden göründü', seri_gerekmez: 'Yönetici: seri gerekmez', depo_degisti: 'Ürün deposu değişti', toplu_depo: 'Yönetici: toplu depo değişimi', toplu_servis: 'Yönetici: toplu servis değişimi', musteri_kopyalandi: 'Müşteri bilgisi kopyalandı', toplu_ice_aktarma: 'Yönetici: toplu içe aktarma (CSV)', belge_gonderildi: 'Satış belgesi müşteriye WhatsApp ile gönderildi'
 };
 const IADE_NEDENLERI = ['Müşteri teslimi iptal etti', 'Servis iade etti', 'Hatalı / arızalı ürün', 'Yanlış ürün gönderildi', 'Diğer'];
 
@@ -416,16 +416,21 @@ function goruntulenen() {
   return [...state.list.values()].map(s => ({ ...s, durum: durumHesapla(s) })).filter(s => {
     if (s.silindi) return false;
     if (!durumUygun(s)) return false;
-    if (state.tur !== 'hepsi' && !gruplar(s).includes(state.tur)) return false;
+    if (!turUygun(s)) return false;
     if (kapaliFiltre() ? !kapPencere(s) : !tarihUygun(s)) return false;
-    if (state.servis && !servisAdlari(s).includes(state.servis)) return false;
-    if (state.depo && !kalemListe(s).some(k => k.depo === state.depo)) return false;
-    if (state.benim && s.satici !== eposta()) return false;
-    if (state.magaza && Magaza.kapsam() === 'magaza') { const nk = Magaza.nokta(); if (nk && s.satisNoktasi !== nk) return false; }   // V11.23: varsayılan “benim mağazam”
-    if (!q) return true;
-    const hay = [s.saleNo, s.musteri, s.telefon, s.adres, saticiAdi(s), servisAdlari(s).join(' '), ...kalemListe(s).map(k => k.seriNo + ' ' + k.urun + ' ' + k.kod), s.not].join(' ').toLowerCase();
-    return hay.includes(q);
+    return kapsamUygun(s, q);
   }).sort(sirala);
+}
+// V11.53: süzgeç koşulları tek yerde — liste VE üstteki sayaçlar (Aktif/Hazırlanıyor/…) aynı kuralı kullanır (sayaç ile liste tutarsız kalmasın)
+const turUygun = s => state.tur === 'hepsi' || gruplar(s).includes(state.tur);
+function kapsamUygun(s, q) {   // durum / tür / tarih dışındaki süzgeçler: servis, depo, “benim”, mağaza, arama
+  if (state.servis && !servisAdlari(s).includes(state.servis)) return false;
+  if (state.depo && !kalemListe(s).some(k => k.depo === state.depo)) return false;
+  if (state.benim && s.satici !== eposta()) return false;
+  if (state.magaza && Magaza.kapsam() === 'magaza') { const nk = Magaza.nokta(); if (nk && s.satisNoktasi !== nk) return false; }   // V11.23: varsayılan “benim mağazam”
+  if (!q) return true;
+  const hay = [s.saleNo, s.musteri, s.telefon, s.adres, saticiAdi(s), servisAdlari(s).join(' '), ...kalemListe(s).map(k => k.seriNo + ' ' + k.urun + ' ' + k.kod), s.not].join(' ').toLowerCase();
+  return hay.includes(q);
 }
 const tarihEtiketi = () => ({ tumu: 'Tüm tarihler', geciken: 'Geciken teslimatlar', bugun: tarihTR(bugun()), yarin: tarihTR(yarin()),
   hafta: tarihTR(bugun()) + ' – ' + tarihTR(gunEkle(bugun(), 6)), aralik: (state.t1 ? tarihTR(state.t1) : '…') + ' – ' + (state.t2 ? tarihTR(state.t2) : '…') }[state.tarih]);
@@ -464,8 +469,9 @@ function kartHtml(s) {
   const depoChip = (!s.kapali && kalemDepoEksik(s)) ? '<span class="svk-cp am">' + ic('alert', 13) + 'Depo seçilmedi</span>' : '';
   const notChip = s.not ? '<span class="svk-cp am svk-notchip" title="' + esc(s.not) + '">' + ic('msg', 13) + esc(s.not.length > 34 ? s.not.slice(0, 34) + '…' : s.not) + '</span>' : '';
   const secMod = state.secimModu && yonetici(), sec = secMod && state.secim.has(s.saleNo), secilemez = secMod && !silinebilir(s);
-  return '<div class="svk-kart t-' + (musteri ? 'musteri' : 'servis') + (karma ? ' karma' : '') + (gec ? ' gec' : '') + (s.iptal ? ' iptal' : '') + (sec ? ' secili' : '') + (secilemez ? ' secilemez' : '') + '" data-act="' + (secMod ? (secilemez ? 'secyok' : 'sec') : 'detay') + '" data-id="' + esc(s.saleNo) + '">' +
-    '<div class="svk-r1">' + (secMod ? '<span class="svk-cb2' + (sec ? ' on' : '') + '">' + (sec ? ic('check', 13) : '') + '</span>' : '') + '<b>' + esc(s.musteri) + '</b>' + rozet(s.durum, s) + '</div>' +
+  const kpV = kopyalandi(s), kpSinif = s.kapali || s.iptal ? '' : (kpV ? ' kp-var' : ' kp-yok');   // V11.53: müşteri bilgisi kopyalanmış (beyaz) / kopyalanmamış (kırmızı zemin)
+  return '<div class="svk-kart d-' + esc(s.durum) + kpSinif + ' t-' + (musteri ? 'musteri' : 'servis') + (karma ? ' karma' : '') + (gec ? ' gec' : '') + (s.iptal ? ' iptal' : '') + (sec ? ' secili' : '') + (secilemez ? ' secilemez' : '') + '" data-act="' + (secMod ? (secilemez ? 'secyok' : 'sec') : 'detay') + '" data-id="' + esc(s.saleNo) + '">' +
+    '<div class="svk-r1">' + (secMod ? '<span class="svk-cb2' + (sec ? ' on' : '') + '">' + (sec ? ic('check', 13) : '') + '</span>' : '') + '<b' + (kpV ? ' class="kp-ad" title="Müşteri bilgisi kopyalandı"' : '') + '>' + esc(s.musteri) + '</b>' + rozet(s.durum, s) + '</div>' +
     urunler +
     '<div class="svk-r3">' +
       '<span class="svk-cp' + (gec ? ' kzh' : '') + '">' + ic('calendar', 13) + tarihTR(s.teslimTarihi) + (s.teslimSaati ? ' · ' + esc(s.teslimSaati) : '') + '</span>' +
@@ -475,7 +481,7 @@ function kartHtml(s) {
         : '<span class="svk-cp ' + (musteri ? 'yr' : 'mv') + '">' + ic(musteri ? 'user' : 'truck', 13) + (musteri ? 'Müşteriye teslim' : esc(servisAdlari(s).join(' · ') || 'Servise teslim')) + '</span>') +
       '<span class="svk-cp">' + ic('box', 13) + (sy.gerek ? tam + '/' + sy.gerek + ' seri' : 'Serisiz') + '</span>' + kapChip + cikis + depoChip + tah + notChip +
     '</div>' +
-    '<div class="svk-r2">' + (s.telefon ? ic('phone', 12) + ' ' + esc(s.telefon) : '') + (s.satici ? ' <span class="svk-satici" title="Satışı yapan">' + ic('user', 12) + ' ' + esc(saticiAdi(s)) + '</span>' : '') + '</div>' +
+    '<div class="svk-r2">' + (s.telefon ? ic('phone', 12) + ' ' + esc(s.telefon) : '') + (saticiGorunen(s) ? ' <span class="svk-satici" title="Satışı yapan">' + ic('user', 12) + ' ' + esc(saticiAdi(s)) + '</span>' : '') + '</div>' +
     (s.iptal || s.kapali || s.servisTeslim ? '' : '<div class="svk-bar' + (gec ? ' kz' : '') + '"><i style="width:' + yuzde + '%"></i></div>') + '</div>';
 }
 function grupBasligi(t, say) {
@@ -514,7 +520,8 @@ function listeCiz(filtreyeGit) {
   state.yonetim = false; state.sorguEkrani = false;
   const eskiKay = kok().querySelector('.svk-scroll');
   const top = eskiKay ? eskiKay.scrollTop : 0;
-  const hepsi = [...state.list.values()].filter(s => !s.silindi).map(s => ({ ...s, durum: durumHesapla(s) }));
+  const qs = state.ara.trim().toLowerCase();
+  const hepsi = [...state.list.values()].filter(s => !s.silindi).map(s => ({ ...s, durum: durumHesapla(s) })).filter(s => kapsamUygun(s, qs));   // V11.53: sayaçlar listeyle aynı kapsamda (mağaza/servis/depo/arama)
   const aktif = hepsi.filter(s => !s.kapali);
   const b = bugun(), y = yarin();
   const say = {
@@ -523,8 +530,7 @@ function listeCiz(filtreyeGit) {
     barkod: aktif.filter(s => s.durum === 'barkod_bekliyor').length, serviste: aktif.filter(s => s.durum === 'serviste' || s.durum === 'kismi').length,
     hepsi: aktif.length, servis: aktif.filter(s => gruplar(s).includes('servis')).length, musteri: aktif.filter(s => gruplar(s).includes('musteri')).length
   };
-  const durumSay = {}; hepsi.forEach(s => { if (s.kapali && !kapPencere(s)) return; durumSay[s.durum] = (durumSay[s.durum] || 0) + 1; });
-  durumSay.aktif = aktif.length;
+  const durumSay = {}; hepsi.forEach(s => { if (!turUygun(s) || (s.kapali ? !kapPencere(s) : !tarihUygun(s))) return; durumSay[s.durum] = (durumSay[s.durum] || 0) + 1; if (!s.kapali) durumSay.aktif = (durumSay.aktif || 0) + 1; });   // V11.53: tür + tarih süzgeci de sayılır → çip sayısı = listede görünen
   const kpi = (k, sayi, etiket, kz, on) => '<button class="svk-kpi' + (kz && sayi ? ' kirmizi' : '') + (on ? ' on' : '') + '" data-act="kpi" data-k="' + k + '"><b>' + sayi + '</b><span>' + etiket + '</span></button>';
   const filtreler = FILTRELER;
   const tchip = (k, l, cls) => '<button class="svk-chip' + (cls ? ' ' + cls : '') + (state.tarih === k ? ' on' : '') + '" data-act="tarih" data-k="' + k + '">' + l + (k === 'geciken' && say.geciken ? ' <i>' + say.geciken + '</i>' : '') + '</button>';
@@ -534,6 +540,7 @@ function listeCiz(filtreyeGit) {
       '<div class="svk-head"><div class="svk-ht"><h1>' + ic('truck', 20) + ' Sevkiyat Yönetimi</h1>' +
         '<p><b>' + say.hepsi + '</b> aktif sevkiyat' + (say.geciken ? ' · <span class="kz">' + say.geciken + ' geciken</span>' : '') + ' · ' + new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', weekday: 'long' }) + '</p></div>' +
         '<div class="svk-hbtns">' + (yonetici() ? '<button class="svk-ib' + (state.secimModu ? ' on' : '') + '" data-act="secmod" title="Seçerek sil" aria-label="Seçerek sil">' + ic('check', 18) + '</button><button class="svk-ib" data-act="yonetim" title="Yönetici araçları" aria-label="Yönetici araçları">' + ic('tools', 18) + '</button>' : '') +
+        (depoYetkili() ? '<button class="svk-ib" data-act="gonderim" title="Satış belgesi gönderim kuyruğu (WhatsApp)" aria-label="Belge gönderimi" style="position:relative">' + ic('msg', 18) + '<b id="svk-gnd-rozet" style="display:none;position:absolute;top:-5px;right:-5px;min-width:17px;height:17px;border-radius:9px;background:#D01F2E;color:#fff;font-size:.65rem;line-height:17px;text-align:center;padding:0 4px"></b></button>' : '') +
         '<button class="svk-ib" data-act="sorgu" title="Müşteri sorgula" aria-label="Müşteri sorgula">' + ic('search', 18) + '</button>' +
         '<button class="svk-ib" data-act="rapor" title="Seri / müşteri raporu (Excel)" aria-label="Rapor">' + ic('file', 18) + '</button>' +
         '<button class="svk-ib" data-act="yazdir" title="Yükleme listesi yazdır" aria-label="Yükleme listesi">' + ic('printer', 18) + '</button>' +
@@ -566,6 +573,7 @@ function listeCiz(filtreyeGit) {
         '</div>' +
         '<div class="svk-liste">' + listeHtml() + '</div>' +
       '</div>' + secBarHtml() + '</div>';
+  try { if (window.Gonderim && window.Gonderim.rozet) window.Gonderim.rozet(); } catch (_e) { /* rozet isteğe bağlı */ }
   const kay = kok().querySelector('.svk-scroll');
   if (kay) {
     kay.scrollTop = top;
@@ -637,6 +645,8 @@ function filtreServisleri() {
 }
 // V11.37: yönetici dışı kullanıcı bir sevkiyatın müşteri bilgisini YALNIZ BİR KEZ kopyalayabilir (kayıt sunucuda tutulur; kim/ne zaman hareket geçmişinde)
 const kopyaAnahtar = e => String(e || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+const kopyalandi = s => !!s.kopya && Object.keys(s.kopya).length > 0;   // V11.53: herhangi bir kullanıcı “Müşteri + fiyat bilgisini kopyala”ya bastı
+const saticiGorunen = s => !!String((s && s.saticiAd) || '').trim() || (!!String((s && s.satici) || '').trim() && String(s.satici).trim() !== '-');   // V11.53: satici '-' (kullanıcı e-postası kaydedilememiş eski satış) → gösterme
 const kopyaYapildi = s => !yonetici() && !!(s.kopya && s.kopya[kopyaAnahtar(eposta())]);
 function kopyalaDugme(s) {
   return kopyaYapildi(s)
@@ -675,7 +685,7 @@ function detayHtml(s) {
     banner += '<div class="svk-banner mr">' + ic('tools', 20) + '<div><b>Yönetici düzeltme modu</b>Sevkiyat tamamlanmış; yönetici olarak ürünlerin teslim şeklini (müşteri alır / servis götürür), seri numarasını (stok kontrolü gerekçeyle aşılabilir), deposunu ve teslimat bilgilerini düzeltebilirsiniz. Her değişiklik hareket geçmişine yazılır.</div></div>';
   }
   if (!s.kapali && !seriYetkili(s)) {   // V11.37: başkasının satışı → salt okunur uyarısı
-    banner += '<div class="svk-banner gr">' + ic('info', 20) + '<div><b>Salt okunur</b>Bu satışı <b style="display:inline">' + esc(saticiAdi(s)) + '</b> yaptı. Değişiklik yalnızca satışı yapan personel, destek veya yönetici tarafından yapılabilir.</div></div>';
+    banner += '<div class="svk-banner gr">' + ic('info', 20) + '<div><b>Salt okunur</b>Bu satışı <b style="display:inline">' + esc(saticiAdi(s)) + '</b> yaptı. Satışın yapıldığı gün içinde tüm satış personeli işlem yapabilir; sonraki günlerde yalnızca satışı yapan personel, destek veya yönetici değiştirebilir.</div></div>';
   }
 
   // Satır kamerası: aynı üründen birden fazla boş satır varsa (toplu ürün) rozet kalan adedi gösterir; tarama o ürünün satırlarını sırayla doldurur
@@ -845,11 +855,11 @@ function detayHtml(s) {
       '<div class="svk-ht"><h1 style="font-size:1rem;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(s.musteri) + '</h1><p style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(k.map(x => x.urun).join(', ')) + ' · ' + tarihTR(s.teslimTarihi) + (s.teslimSaati ? ' ' + esc(s.teslimSaati) : '') + '</p></div>' + rozet(d, s) +
       '<button class="svk-ib" data-act="yenile" title="Yenile" aria-label="Yenile">' + ic('refresh', 18) + '</button></div>' +
     '<div class="svk-scroll svk-det">' + banner + adimlar(s) +
-      '<div class="svk-card"><div class="svk-ch">' + ic('user', 16) + ' Müşteri</div><div class="svk-cb"><div class="svk-ad">' + esc(s.musteri) + '</div>' +
+      '<div class="svk-card"><div class="svk-ch">' + ic('user', 16) + ' Müşteri</div><div class="svk-cb"><div class="svk-ad' + (kopyalandi(s) ? ' kp-ad' : '') + '">' + esc(s.musteri) + '</div>' +
         satir('phone', '<a href="tel:' + esc(s.telefon) + '">' + esc(s.telefon) + '</a>' + (s.telefon2 ? ' · <a href="tel:' + esc(s.telefon2) + '">' + esc(s.telefon2) + '</a>' : '')) +
         satir('pin', esc(s.adres || 'Adres girilmemiş')) +
         (s.tc ? satir('shield', 'Kimlik: ' + esc(yonetici() ? s.tc : maskeKimlik(s.tc))) : '') + (s.email ? satir('msg', esc(yonetici() ? s.email : maskeEposta(s.email))) : '') +
-        satir('user', 'Satışı yapan: <b>' + esc(saticiAdi(s)) + '</b>') +
+        satir('user', 'Satışı yapan: <b>' + (saticiGorunen(s) ? esc(saticiAdi(s)) : 'Belirtilmemiş <small>(eski kayıt)</small>') + '</b>') +
         '<div class="svk-eylem" style="margin-top:10px">' + kopyalaDugme(s) + '</div></div></div>' +
       fiyatKartHtml(s) +
       '<div class="svk-card"><div class="svk-ch">' + ic('truck', 16) + ' Teslimat bilgileri</div><div class="svk-cb">' +
@@ -1086,6 +1096,7 @@ async function tikla(e) {
   if (act === 'tkaydet') return tanimKaydetAkis(el);
   if (act === 'toplu') return topluDegistir(el.dataset.t, el);
   if (act === 'yetim') return yetimTara(el);
+  if (act === 'gonderim') { if (depoYetkili() && window.Gonderim) window.Gonderim.ac(); return; }
   if (act === 'icesablon') return iceSablonIndir();
   if (act === 'iceuygula') return iceUygula(el);
   if (act === 'yetimac') return yetimAc(el.dataset.id, el);
@@ -1364,7 +1375,11 @@ async function panoya(metin) {
 }
 async function musteriKopyala(s) {
   const metin = musteriMetni(s);   // V11.37: tamamı büyük harf · T.C. + e-posta dahil
-  if (yonetici()) { toast((await panoya(metin)) ? 'Müşteri bilgileri panoya kopyalandı.' : 'Kopyalanamadı — tarayıcı izin vermedi.', []); return; }
+  if (yonetici()) {
+    const ak = kopyaAnahtar(eposta());   // V11.53: yönetici kopyası da “girildi” işareti bırakır (hak tüketmez, yeniden kopyalayabilir)
+    if (ak && !(s.kopya && s.kopya[ak])) { try { await guncelle(s, () => ({ yaz: { ['kopya.' + ak]: Date.now() } }), 'musteri_kopyalandi', ''); } catch (_e) { /* işaret yazılamadı: kopyalama yine de yapılır */ } }
+    toast((await panoya(metin)) ? 'Müşteri bilgileri panoya kopyalandı.' : 'Kopyalanamadı — tarayıcı izin vermedi.', []); yenidenCiz(); return;
+  }
   // Yönetici dışı: sevkiyat başına yalnız 1 kez. Önce kullanım sunucuda işlenir (başka cihazdan da tekrar edilemez), sonra panoya yazılır.
   if (kopyaYapildi(s)) return toast('Bu sevkiyatın müşteri bilgisini daha önce kopyaladınız. Yeniden kopyalama yalnızca yönetici tarafından yapılabilir.', []);
   const anahtar = kopyaAnahtar(eposta());
