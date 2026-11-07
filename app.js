@@ -208,7 +208,7 @@ if (localStorage.getItem('aygun_authmode') === '1') {
 // version.json'daki build alanı VE ana ekrandaki küçük sürüm rozeti.
 // Elle senkron tutmaya gerek yok — bump-version.sh script'i tek
 // komutla hepsini birden günceller (bkz. proje köküne eklenen script).
-const APP_BUILD_VERSION = 'V11.54-20261107-1403';
+const APP_BUILD_VERSION = 'V11.56-20261107-1525';
 console.log('%cAYGÜN AVM — app.js build: ' + APP_BUILD_VERSION, 'color:#1C1C1E;font-weight:bold;');
 
 // ✅ Rev 8.8 — 'V8.8-20260729-1927' → 'V8.8 · 29.07.2026 19:27' okunabilir
@@ -2573,8 +2573,25 @@ function showToast(message, type = 'info') {
   el.style.cssText = `background:${style.bg}; border-left:3px solid ${style.border}; margin-bottom:4px; border-radius:6px; padding:8px 12px; display:flex; align-items:center; gap:10px; font-size:.75rem;`;
   el.innerHTML = `<span style="font-size:1rem">${style.icon}</span><span style="flex:1">${message}</span>`;
   ct.appendChild(el); 
-  setTimeout(() => el.remove(), 2500);
+  setTimeout(() => el.remove(), 3000);
 }
+
+// V11.55 — Üst bildirim güvenlik ağı: #change-toast'a ne yazılırsa yazılsın (metin, .show sınıfı, toast-item) son değişiklikten 3 sn sonra temizlenir.
+(function _toastOtoTemizle() {
+  function kur() {
+    const ct = document.getElementById('change-toast');
+    if (!ct) return;
+    let zm = null;
+    new MutationObserver(() => {
+      // eski kodlar düz metin yazar (textContent): okunaklı kutuya sar
+      Array.from(ct.childNodes).forEach(n => { if (n.nodeType === 3 && n.nodeValue.trim()) { const d = document.createElement('div'); d.className = 'toast-item'; d.textContent = n.nodeValue.trim(); ct.replaceChild(d, n); } });
+      if (!ct.firstChild && !ct.classList.contains('show')) return;   // boşsa yeniden zamanlama yok → döngü olmaz
+      clearTimeout(zm);
+      zm = setTimeout(() => { ct.classList.remove('show'); while (ct.firstChild) ct.removeChild(ct.firstChild); }, 3000);
+    }).observe(ct, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', kur); else kur();
+})();
 
 // Premium modal için neden panelini kapatma
 function closeReasonPanel() {
@@ -8118,6 +8135,61 @@ function _showPdfInline(html) {
 }
 window._showPdfInline = _showPdfInline;
 
+// ── V11.55: satış sonrası müşteri bilgisi / onay düzeltme (Sevkiyat → "Müşteri bilgisi ve onayı düzelt") ──
+// Satış kaydını (sales), gerekirse WhatsApp kuyruğunu günceller. Sevkiyat kaydını çağıran (sevkiyat.js, log ile) yazar.
+function _pdfVeriSatistan(sale) {
+  const f = sale.fiyat || {}, o = f.odeme || {}, nakit = (o.tip || 'nakit') === 'nakit';
+  return JSON.parse(JSON.stringify({
+    belgeNo: sale.id, tarih: sale.ts ? new Date(sale.ts).toLocaleDateString('tr-TR') : new Date().toLocaleDateString('tr-TR'),
+    musteriIsim: sale.custName || '', telefon: sale.custPhone || '',
+    musteriTc: sale.kurumsal ? (sale.vergiNo || '') : (sale.custTC || ''), kurumsal: sale.kurumsal === true, firmaUnvan: sale.firmaUnvan || '',
+    vergiDairesi: sale.kurumsal ? (sale.vergiDairesi || '') : '', musteriAdres: sale.address || '', faturaAdres: sale.faturaAdres || '',
+    satici: String(sale.user || '').split('@')[0], not: '',
+    odemeTipi: o.tip || 'nakit', kartAdi: o.kart || '', taksitSayisi: Number(o.taksit) || 0, aylikTaksit: Number(o.aylik) || 0,
+    ...(Number(o.pesin) > 0 ? { pesin: Number(o.pesin), pesinSekli: o.pesinSekli || 'Nakit', kartTutar: Number(o.kartTutar) || 0 } : {}),
+    toplamOdeme: nakit ? Number(f.netNakit || o.toplam || 0) : Number(o.toplam || 0),
+    toplamIndirim: Number(f.urunIndirim || 0) + Number(f.altIndirim || 0), ekIndirim: Number(f.pazarlik || 0), pazarlikNotu: f.pazarlikNotu || '',
+    urunler: Array.isArray(sale.urunler) ? sale.urunler : [], teslimat: null, izin: sale.izin || null
+  }));
+}
+async function _musteriDuzelt(saleNo, v) {
+  const ad = String((v && v.ad) || '').trim(), tel = String((v && v.tel) || '').trim(), adres = String((v && v.adres) || '').trim();
+  if (ad.length < 3) throw new Error('Ad Soyad en az 3 harf olmalı.');
+  const tn = _telNorm(tel); if (!tn) throw new Error('Telefon geçersiz (en az 10 rakam).');
+  const ref = doc(_db, 'sales', saleNo), snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error('Satış kaydı bulunamadı (' + saleNo + ').');
+  const sale = snap.data();
+  const mevcutIzin = sale.izin && sale.izin.aydinlatma && sale.izin.whatsapp ? sale.izin : null;
+  const yeniOnay = !!(v && v.aydinlatma && v.whatsapp);
+  const kim = currentUser?.Email || '-';
+  // izin: telefon değiştiyse rıza eski numara içindi → yeniden onay gerekir
+  const telDegisti = !!(mevcutIzin && mevcutIzin.tel && mevcutIzin.tel !== tn);
+  let izin = telDegisti ? null : mevcutIzin;
+  if (yeniOnay) izin = { aydinlatma: true, whatsapp: true, t: new Date().toISOString(), u: kim, surum: '2', tel: tn, sonradan: true };
+  const yaz = { custName: ad, custPhone: tel, telNorm: tn, address: adres, izin: izin || null };
+  await updateDoc(ref, yaz);
+  const guncel = { ...sale, ...yaz, id: saleNo };
+  try { const _k = 'aygun_sales', _l = JSON.parse(localStorage.getItem(_k) || '[]'); const i = _l.findIndex(x => x.id === saleNo); if (i >= 0) { Object.assign(_l[i], yaz); localStorage.setItem(_k, JSON.stringify(_l)); } const sx = sales.find(x => x.id === saleNo); if (sx) Object.assign(sx, yaz); } catch (_e) { /* yoksay */ }
+  // PDF verisi (bu cihazda varsa o, yoksa satış kaydından yeniden kurulur)
+  let pdf; try { pdf = (JSON.parse(localStorage.getItem('aygun_salepdf') || '{}'))[saleNo]; } catch (_e) { pdf = null; }
+  pdf = pdf ? { ...pdf } : _pdfVeriSatistan(guncel);
+  Object.assign(pdf, { musteriIsim: ad, telefon: tel, musteriAdres: adres, izin: izin || null });
+  pdf = JSON.parse(JSON.stringify(pdf));
+  try { const _k = 'aygun_salepdf', _m = JSON.parse(localStorage.getItem(_k) || '{}'); if (_m[saleNo]) { _m[saleNo] = pdf; localStorage.setItem(_k, JSON.stringify(_m)); } } catch (_e) { /* yoksay */ }
+  let kuyruk = 'yok';   // yok | eklendi | guncellendi | mevcut (zaten gönderilmiş/çıkarılmış)
+  const kref = doc(_db, 'gonderimKuyrugu', saleNo), onayli = !!(izin && izin.aydinlatma && izin.whatsapp);
+  let ks = null;
+  try { ks = await getDoc(kref); } catch (_e) { ks = null; /* satış personeli kuyruğu okuyamaz (kural: yalnız admin/destek) → aşağıda oluşturmayı dener */ }
+  try {
+    if (ks && ks.exists()) {
+      if (ks.data().durum === 'bekliyor') { await updateDoc(kref, { musteri: ad, telefon: tel, telNorm: tn, izin: izin || null, pdf }); kuyruk = 'guncellendi'; }
+      else kuyruk = 'mevcut';
+    } else if (onayli) { await gonderimKuyrugunaEkle({ ...guncel, izin }, pdf); kuyruk = 'eklendi'; }
+  } catch (e) { kuyruk = 'hata'; console.warn('kuyruk düzeltme:', e && e.message); }
+  return { kuyruk, izinVar: !!izin, telDegisti, yeniOnay };
+}
+
+
 // ✅ Rev 10.0: Sevkiyat modülü (sevkiyat.js) köprüsü. Modül app.js'in
 // iç değişkenlerine dokunmaz; sadece bu nesne üzerinden Firestore ve
 // birkaç yardımcıyı kullanır. Böylece app.js şişmez, modül bağımsız kalır.
@@ -8128,6 +8200,7 @@ window._svkBridge = {
   runTransaction, arrayUnion, getCountFromServer, waitForPendingWrites, getDoc, deleteField,
   satisHtml: d => buildPremiumPDF('SATIŞ SÖZLEŞMESİ', d),   // V11.45: şirket telefonundaki gönderim kuyruğu PDF'i buradan üretir (KVKK maskeli, mevcut şablon)
   user: () => currentUser,
+  musteriDuzelt: _musteriDuzelt,   // V11.55
   urunBul: kod => { // Kod → ürün satırı (SeriTakip sütunu vb. için)
     // V11.20: O(N) tarama yerine liste başına bir kez kurulan Map (seriGerekir her kalem/render'da çağırıyor)
     const list = window._cachedUrunler || allProducts || [];
@@ -12410,9 +12483,7 @@ async function adminForceLogout(targetEmail) {
       query(collection(_db, 'sessions'), where('email', '==', targetEmail))
     );
     if(sesSnap.empty) {
-      const _ct = document.getElementById('change-toast');
-      if(_ct) { _ct.textContent = targetEmail.split('@')[0] + ' aktif oturumu yok'; _ct.classList.add('show'); setTimeout(()=>_ct.classList.remove('show'),2500); }
-      return;
+      return;   // V11.55: "aktif oturumu yok" bildirimi kaldırıldı (gereksiz ve ekranda takılıyordu)
     }
     // forceLogout flag'ini true yap — personelin cihazına anlık bildirim gider
     for(const d of sesSnap.docs) {

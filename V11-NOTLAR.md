@@ -452,3 +452,15 @@ Tüm dosyalar elle + araçla tarandı (sözdizimi, no-undef, ulaşılamayan kod,
 ## V11.54 — "Satışı Onayla" donma/ölü düğme sertleştirmesi
 - Belirti: Satışı Onayla'ya basınca bir şey olmuyor, sevkiyat ekranına geçilmiyor. Kök neden kesinleşmedi; en olası: satış sonrası zincirdeki `await logSessionResult('satis')` (Firestore onayı bekler) çevrimdışı/"client is offline"/iki site açıkken sonsuz bekleyebilir → `_finalizeMesgul` kilidi açılmaz, sonraki basışlar sessizce yutulur.
 - Düzeltme (app.js): istatistik yazımı en çok 2,5 sn beklenir; `Sevkiyat.detayAc` beklenmez; kilit 25 sn sonra kendiliğinden açılır; kilitliyken basış "Satış kaydediliyor, lütfen bekleyin…" bildirimi verir. Satış/sevkiyat kaydı mantığı değişmedi.
+
+## V11.55 (7 Kasım 2026)
+- WhatsApp belge kuyruğu (gonderim.js): yönetici için her satırda onay kutusu HER ZAMAN açık (ayrı "Seç / toplu sil" düğmesi kaldırıldı). Üstte "☑ Tümünü seç / ☐ Seçimi kaldır" + "🗑 Seçilenleri sil (n)". Bekleyen / Gönderilen / Çıkarılan / Arşiv sekmelerinde geçerli. Satır adına dokununca detay yine açılır. Destek/satış: onay kutusu yok. Gönderilen sekmesinde "↻ Yeniden gönder (yönetici)" artık her zaman görünür.
+- Üst bildirimler (app.js + index.html <style id="v1136d-css">): #change-toast okunaklı (koyu zemin, beyaz 0,95rem yazı, üstte ortada); herhangi bir kod metin/.show/toast-item yazsa da son değişiklikten 3 sn sonra temizlenir (MutationObserver güvenlik ağı). "… aktif oturumu yok" bildirimi tamamen kaldırıldı. showToast 2,5 → 3 sn.
+- Testler: gonderim-testi 50 (yeni onay kutusu senaryosu), lint temiz.
+
+## V11.56 (7 Kasım 2026)
+- Satış sonrası düzeltme: Sevkiyat detayı → "Belgeler ve iletişim" → **"Müşteri bilgisi / onayı düzelt"** (satışı yapan, destek, yönetici; teslim edilmemiş + iptal olmayan kayıt; yöneticide kapalı kayıt da). Ad Soyad / Telefon / Adres düzeltilir; KVKK + WhatsApp onay kutuları (izin yoksa ya da telefon değişirse) işaretlenebilir (ikisi birlikte).
+- Yazılanlar: sales/{no} (custName, custPhone, telNorm, address, izin), sevkiyatlar/{no} (musteri, telefon, telNorm, adres + hareket "Müşteri bilgisi / onay düzeltildi"), gonderimKuyrugu: bekleyen kayıt varsa güncellenir; yoksa ve onay varsa YENİ eklenir (PDF verisi bu cihazdaki kayıttan, yoksa satış kaydından yeniden kurulur); gönderilmiş/çıkarılmış kayıt değişmez.
+- Sonradan işaretlenen onay `izin.sonradan:true` + işaretleyen kullanıcı + saat ile tutulur (beyan niteliğinde). Telefon değişirse eski rıza geçersiz sayılır.
+- Satış personeli kuyruk kaydını okuyamaz (kural); bu durumda yeni kayıt oluşturmayı dener. T.C./vergi no/e-posta bu ekrandan değişmez.
+- Testler: musteri-duzelt-testi.js (11, app.js mantığı), musteri-duzelt-ui-testi.js (9, t/ klasöründe), gonderim-testi 50, lint temiz.

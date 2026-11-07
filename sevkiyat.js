@@ -59,13 +59,13 @@ import {
   SERVISLER, DEPOLAR, SAAT_DILIMLERI, saatSira, SATIS_NOKTALARI, tanimYukle, tanimKaydet, tanimDegisti, tanimTemizle, kalemDepoEksik, aralikListeyeYukle, musteriSorgula, DURUMLAR, FILTRELER, B, esc, bugun, yarin, tarihTR, zamanTR, tl,
   eposta, yonetici, depoYetkili, seriYetkili, kodAnahtar, kodEs, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
   state, kancalar, seriState, seriYukle, seriDogrula, seriSahibi, kalemSerisiz, bilinenOgren, durumEtiket, normSeri, cikisDurumu, tekYenile,
-  yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi, csvAyristir, iceAktarPlan, iceAktarYaz
-} from './sevkiyat-veri.js?v=V11.54-20261107-1403';
-import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.54-20261107-1403';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.54-20261107-1403';
-import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.54-20261107-1403';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.54-20261107-1403';
-import * as Talep from './sevkiyat-talep.js?v=V11.54-20261107-1403';
+  yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi, csvAyristir, iceAktarPlan, iceAktarYaz, telNorm, dec
+} from './sevkiyat-veri.js?v=V11.56-20261107-1525';
+import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.56-20261107-1525';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.56-20261107-1525';
+import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.56-20261107-1525';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.56-20261107-1525';
+import * as Talep from './sevkiyat-talep.js?v=V11.56-20261107-1525';
 
 const $ = id => document.getElementById(id);
 const SAYIM_MS = 4 * 60 * 1000;
@@ -76,7 +76,7 @@ const LOG_AD = {
   servise_teslim: 'Teslim edildi', kalem_teslim_sekli: 'Ürünün teslim şekli değişti', kalem_servis: 'Götüren servis seçildi', teslim_edildi: 'Çıkış doğrulandı · tamamlandı', teslim_geri_alindi: 'Teslim geri alındı',
   kalem_eklendi: 'Ürün eklendi', kalem_degisti: 'Ürün değiştirildi', kalem_cikarildi: 'Ürün satırı çıkarıldı', iade: 'İade / depoya döndü', not_degisti: 'Not güncellendi', iptal: 'İptal edildi', iptal_geri_alindi: 'İptal geri alındı',
   silindi: 'Kayıt silindi', servis_atandi: 'Servis atandı', teslim_turu_degisti: 'Teslim şekli değişti', teslimat_degisti: 'Teslimat tarihi değişti',
-  tahsilat_alindi: 'Tahsilat alındı', seri_iade: 'Seri iade edildi / stokta yeniden göründü', seri_gerekmez: 'Yönetici: seri gerekmez', depo_degisti: 'Ürün deposu değişti', toplu_depo: 'Yönetici: toplu depo değişimi', toplu_servis: 'Yönetici: toplu servis değişimi', musteri_kopyalandi: 'Müşteri bilgisi kopyalandı', toplu_ice_aktarma: 'Yönetici: toplu içe aktarma (CSV)', belge_gonderildi: 'Satış belgesi müşteriye WhatsApp ile gönderildi'
+  tahsilat_alindi: 'Tahsilat alındı', seri_iade: 'Seri iade edildi / stokta yeniden göründü', seri_gerekmez: 'Yönetici: seri gerekmez', depo_degisti: 'Ürün deposu değişti', toplu_depo: 'Yönetici: toplu depo değişimi', toplu_servis: 'Yönetici: toplu servis değişimi', musteri_kopyalandi: 'Müşteri bilgisi kopyalandı', toplu_ice_aktarma: 'Yönetici: toplu içe aktarma (CSV)', belge_gonderildi: 'Satış belgesi müşteriye WhatsApp ile gönderildi', musteri_duzeltildi: 'Müşteri bilgisi / onay düzeltildi'
 };
 const IADE_NEDENLERI = ['Müşteri teslimi iptal etti', 'Servis iade etti', 'Hatalı / arızalı ürün', 'Yanlış ürün gönderildi', 'Diğer'];
 
@@ -152,6 +152,50 @@ kancalar.yazimHata = (id, e) => {
   toast('Sevkiyat kaydı sunucuya YAZILAMADI (' + esc(id) + '): ' + esc((e && e.message) || e) + '. Yönetici Araçları → “Sevkiyat kaydı olmayan satışlar”.', []);
 };
 kancalar.bekleyen = n => pillGuncelle(n);
+
+// V11.55: Satış sonrası müşteri adı / telefon / adres düzeltme + (unutulduysa) KVKK-WhatsApp onay işareti → WhatsApp kuyruğuna alma.
+// Onay kutuları yalnız "müşteriden bu onayları satış sırasında aldım" beyanıdır; kayıtta sonradan:true + kim/ne zaman tutulur.
+async function musteriDuzeltAc(s) {
+  const eski = $('svk-mduz'); if (eski) eski.remove();
+  let sale = null; try { const sn = await B().getDoc(B().doc(B().db, 'sales', s.saleNo)); sale = sn.exists() ? sn.data() : null; } catch (_e) { /* yoksay */ }
+  const izin = sale && sale.izin && sale.izin.aydinlatma && sale.izin.whatsapp ? sale.izin : null;
+  const o = document.createElement('div'); o.id = 'svk-mduz';
+  o.style.cssText = 'position:fixed;inset:0;z-index:2147482000;background:rgba(0,0,0,.55);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:12px';
+  const inp = 'width:100%;box-sizing:border-box;padding:10px;font-size:1rem;border:1px solid #cbd5e1;border-radius:8px;margin:2px 0 10px';
+  o.innerHTML = '<div style="background:#fff;color:#111;border-radius:12px;max-width:520px;width:100%;padding:16px;margin:auto 0">' +
+    '<h3 style="margin:0 0 4px">Müşteri bilgisi / onayı düzelt</h3><div style="font-size:.8rem;opacity:.7;margin-bottom:10px">' + esc(s.saleNo) + '</div>' +
+    '<label style="font-size:.8rem">Ad Soyad</label><input id="md-ad" style="' + inp + '" value="' + esc(dec(s.musteri || '')) + '">' +
+    '<label style="font-size:.8rem">Telefon</label><input id="md-tel" inputmode="tel" style="' + inp + '" value="' + esc(s.telefon || '') + '">' +
+    '<label style="font-size:.8rem">Adres</label><textarea id="md-adres" rows="2" style="' + inp + '">' + esc(s.adres || '') + '</textarea>' +
+    (izin ? '<div style="background:#dff1ea;border-radius:8px;padding:9px;font-size:.85rem;margin-bottom:10px">✓ KVKK aydınlatma + WhatsApp onayı kayıtlı. Telefon numarası değişirse onay yeniden gerekir.</div>' : '') +
+    '<div id="md-onay" style="' + (izin ? 'display:none;' : '') + 'margin-bottom:10px"><div style="font-size:.8rem;font-weight:700;margin-bottom:4px">Müşteri onayları <span style="font-weight:400;opacity:.7">(WhatsApp ile belge gönderimi için)</span></div>' +
+    '<label style="display:flex;gap:8px;font-size:.82rem;margin-bottom:6px"><input type="checkbox" id="md-k1" style="width:22px;height:22px;flex:none"> KVKK Aydınlatma Metni müşteriye sunuldu ve müşteri bilgilendirildi.</label>' +
+    '<label style="display:flex;gap:8px;font-size:.82rem"><input type="checkbox" id="md-k2" style="width:22px;height:22px;flex:none"> Müşteri, satış belgesinin (kişisel verileri maskeli) yukarıdaki numaraya şirket WhatsApp hattından gönderilmesine — WhatsApp’ın yurt dışı merkezli bir hizmet olduğunu bilerek — açık rıza verdi.</label>' +
+    '<div style="font-size:.74rem;opacity:.7;margin-top:6px">Yalnızca müşteriden gerçekten alınan onayı işaretleyin. Kayıt “sonradan işaretlendi” + sizin adınız + saat ile tutulur.</div></div>' +
+    '<div id="md-hata" style="color:#b91c1c;font-size:.85rem;margin-bottom:8px"></div>' +
+    '<div style="display:flex;gap:8px"><button id="md-iptal" style="flex:1;min-height:44px;border-radius:10px;border:1px solid #cbd5e1;background:#fff;font-weight:700">Vazgeç</button><button id="md-kaydet" style="flex:1;min-height:44px;border-radius:10px;border:0;background:#0f7a5a;color:#fff;font-weight:700">Kaydet</button></div></div>';
+  document.body.appendChild(o);
+  const g = id => o.querySelector('#' + id), kapat = () => o.remove();
+  g('md-iptal').onclick = kapat;
+  g('md-tel').oninput = () => { if (izin && telNorm(g('md-tel').value) !== (izin.tel || '')) g('md-onay').style.display = ''; else if (izin) g('md-onay').style.display = 'none'; };
+  g('md-kaydet').onclick = async () => {
+    const btn = g('md-kaydet'), hata = m => { g('md-hata').textContent = m; btn.disabled = false; };
+    const ad = g('md-ad').value.trim(), tel = g('md-tel').value.trim(), adres = g('md-adres').value.trim();
+    if (ad.length < 3) return hata('Ad Soyad en az 3 harf olmalı.');
+    if (!telNorm(tel)) return hata('Telefon geçersiz (en az 10 rakam).');
+    const k1 = g('md-k1').checked, k2 = g('md-k2').checked;
+    if (k1 !== k2) return hata('İki onay kutusunu birlikte işaretleyin ya da ikisini de boş bırakın.');
+    btn.disabled = true; g('md-hata').textContent = '';
+    let r;
+    try { r = await B().musteriDuzelt(s.saleNo, { ad, tel, adres, aydinlatma: k1, whatsapp: k2 }); }
+    catch (e) { return hata('Kaydedilemedi: ' + ((e && e.message) || e)); }
+    try { await guncelle(s, () => ({ yaz: { musteri: ad, telefon: tel, telNorm: telNorm(tel), adres } }), 'musteri_duzeltildi', ad + ' · ' + tel + (r.yeniOnay ? ' · onay sonradan işaretlendi' : '')); } catch (_e) { /* sevkiyat yazımı kancalarda raporlanır */ }
+    kapat();
+    const kz = { eklendi: 'WhatsApp belge kuyruğuna eklendi.', guncellendi: 'WhatsApp kuyruğundaki kayıt güncellendi.', mevcut: 'Bu belge kuyrukta zaten gönderilmiş/çıkarılmış; kuyruk değişmedi.', hata: 'Kayıt güncellendi ama WhatsApp kuyruğuna YAZILAMADI (yetki/bağlantı); destek/yönetici ile tekrar deneyin.', yok: r.izinVar ? '' : 'Onay işaretlenmediği için belge WhatsApp kuyruğuna alınmadı.' }[r.kuyruk] || '';
+    toast('Müşteri bilgisi düzeltildi. ' + esc(kz), []);
+    try { detayAc(s.saleNo); } catch (_e) { /* yoksay */ }
+  };
+}
 
 // ═══ Toast / bekleyen yazma rozeti ═════════════════════════════
 function toast(html, btns) {
@@ -874,6 +918,7 @@ function detayHtml(s) {
       tahsilatKart +
       '<div class="svk-card"><div class="svk-ch">' + ic('file', 16) + ' Belgeler ve iletişim</div><div class="svk-cb svk-eylem">' +
         '<button class="svk-btn" data-act="depofisi">' + ic('printer', 15) + ' Depo fişi</button><button class="svk-btn" data-act="teslimbelge">' + ic('printer', 15) + ' Teslimat belgesi</button>' +
+        (!s.iptal && ((!s.kapali && seriYetkili(s)) || yonetici()) ? '<button class="svk-btn" data-act="musteriduz">' + ic('file', 15) + ' Müşteri bilgisi / onayı düzelt</button>' : '') +
         (B().satisPdfVar && B().satisPdfVar(s.saleNo) ? '<button class="svk-btn" data-act="satispdf">' + ic('file', 15) + ' Satış sözleşmesi (PDF)</button>' : '') +
         '<button class="svk-btn" data-act="waservis">' + ic('msg', 15) + ' Servise mesaj (kopyala)</button><button class="svk-btn" data-act="wa">' + ic('msg', 15) + ' Müşteriye WhatsApp</button>' + (s.teslimEdildi ? '<button class="svk-btn" data-act="watesl">' + ic('msg', 15) + ' Teşekkür mesajı</button>' : '') + '</div></div>' +
       '<div class="svk-card"><div class="svk-ch">' + ic('clock', 16) + ' Hareket geçmişi</div><div class="svk-cb"><ul class="svk-log">' + log + '</ul></div></div>' +
@@ -1104,6 +1149,7 @@ async function tikla(e) {
   if (!s) return;
   if (act === 'depofisi') return belgeAc('depo', s);
   if (act === 'teslimbelge') return belgeAc('teslim', s);
+  if (act === 'musteriduz') return musteriDuzeltAc(s);
   if (act === 'satispdf') { if (!B().satisPdf(s.saleNo)) toast('Sözleşme verisi bu cihazda bulunamadı.', []); return; }
   if (act === 'waservis') {
     const m = servisMesaji(s);

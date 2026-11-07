@@ -11,12 +11,12 @@
 //  · "Gönderildi" işareti DAİMA personel beyanıdır (paylaşımın başarısı kesin bilinemez). Çift gönderim işlemle engellenir.
 //  · Kayıt gönderilince PDF snapshot'ı (kişisel veri) silinir; yalnız kim/ne zaman/hangi kanal kalır.
 // ═══════════════════════════════════════════════════════════════
-import { B, esc, dec, eposta, kullanici, depoYetkili, yonetici } from './sevkiyat-veri.js?v=V11.54-20261107-1403';
+import { B, esc, dec, eposta, kullanici, depoYetkili, yonetici } from './sevkiyat-veri.js?v=V11.56-20261107-1525';
 
 const COL = 'gonderimKuyrugu';
 const LIB = new URL('./vendor/html2pdf.bundle.min.js', import.meta.url).href;
 const OV = 'gnd-ov';
-const durum = { liste: [], acik: null, dosya: null, dogru: false, adim: 'hazir', son: [], cik: [], sekme: 'bekleyen', hazir: 'yok', hazirHata: '', jeton: 0, secimModu: false, secim: new Set() };
+const durum = { liste: [], acik: null, dosya: null, dogru: false, adim: 'hazir', son: [], cik: [], sekme: 'bekleyen', hazir: 'yok', hazirHata: '', jeton: 0, secim: new Set() };
 const IKI_GUN = 2 * 864e5;   // V11.53: gönderilenler 2 gün “Gönderilen” sekmesinde kalır, sonra Arşiv'e geçer (PDF kopyası da silinir)
 const yeniMi = k => Date.now() - (k.gonderimT || 0) < IKI_GUN;
 const kayitBul = id => durum.liste.find(x => x.saleNo === id) || durum.son.find(x => x.saleNo === id);
@@ -135,13 +135,13 @@ const KANAL = { paylasim: 'paylaşım menüsü', sohbet: 'WhatsApp (sohbet + PDF
 const sekmeBtn = (k, et, n) => '<button class="gs' + (durum.sekme === k ? ' on' : '') + '" data-g="sekme" data-s="' + k + '">' + et + (n == null ? '' : ' (' + n + ')') + '</button>';
 function listeCiz(uyari) {
   const o = overlay(); durum.acik = null; durum.dosya = null; durum.dogru = false; durum.adim = 'hazir'; durum.hazir = 'yok'; durum.jeton++;
-  const yon = yonetici(), L = durum.liste, sm = yon && durum.secimModu;
+  const yon = yonetici(), L = durum.liste, sm = yon;   // V11.55: yöneticide onay kutuları her zaman açık (ayrı "seç" düğmesi yok)
   const sil = id => yon && !sm ? '<button class="gl r" data-g="sil" data-id="' + esc(id) + '">🗑 Kaydı sil (yönetici)</button>' : '';
   const cb = id => sm ? '<input type="checkbox" class="gcb" data-g="sec" data-id="' + esc(id) + '"' + (durum.secim.has(id) ? ' checked' : '') + ' style="width:22px;height:22px;flex:none;margin-right:10px" aria-label="Seç">' : '';
   const sonY = durum.son.filter(yeniMi), arsiv = durum.son.filter(k => !yeniMi(k));
   const gonderilenSatir = (k, tekrar) => '<div class="gk"><div class="gf">' + cb(k.saleNo) + '<span style="flex:1"><b>' + esc(dec(k.musteri)) + '</b><small style="display:block;opacity:.7">' + esc(k.saleNo) + ' · ' + esc(k.urun || '') + '</small></span>' +
     '<span style="text-align:right">' + esc(tarihSaat(k.gonderimT)) + '<small style="display:block;opacity:.7">' + esc(String(k.gonderenAd || k.gonderen || '').split('@')[0]) + ' · ' + esc(KANAL[k.kanal] || k.kanal || '') + (k.tekrarSayisi ? ' · ' + (k.tekrarSayisi + 1) + '. gönderim' : '') + '</small></span></div>' +
-    (tekrar && yon && !sm && k.pdf && izinTamam(k) ? '<button class="gl" data-g="tekrar" data-id="' + esc(k.saleNo) + '">↻ Yeniden gönder (yönetici)</button>' : '') + sil(k.saleNo) + '</div>';
+    (tekrar && yon && k.pdf && izinTamam(k) ? '<button class="gl" data-g="tekrar" data-id="' + esc(k.saleNo) + '">↻ Yeniden gönder (yönetici)</button>' : '') + sil(k.saleNo) + '</div>';
   let ic, idler;
   if (durum.sekme === 'gonderilen') {
     idler = sonY.map(k => k.saleNo);
@@ -159,15 +159,15 @@ function listeCiz(uyari) {
     idler = L.map(k => k.saleNo);
     const durumYazi = k => (!izinTamam(k) ? 'onay eksik' : (!telE164(k.telNorm || k.telefon) ? 'numara eksik' : 'bekliyor'));
     ic = L.length ? L.map(k => sm
-      ? '<div class="gk"><div class="gf">' + cb(k.saleNo) + '<span style="flex:1"><b>' + esc(dec(k.musteri)) + '</b><small style="display:block;opacity:.7">' + esc(k.saleNo) + ' · ' + esc(k.urun || '') + ' · ' + esc(tarihSaat(k.ts)) + '</small></span><span class="gp">' + durumYazi(k) + '</span></div></div>'
+      ? '<div style="display:flex;align-items:center;gap:8px">' + cb(k.saleNo).replace('margin-right:10px', 'margin-right:0') + '<button class="gr" data-g="detay" data-id="' + esc(k.saleNo) + '" style="flex:1"><span><b>' + esc(dec(k.musteri)) + '</b><small>' + esc(k.saleNo) + ' · ' + esc(k.urun || '') + ' · ' + esc(tarihSaat(k.ts)) + '</small></span><span class="gp">' + durumYazi(k) + '</span></button></div>'
       : '<button class="gr" data-g="detay" data-id="' + esc(k.saleNo) + '"><span><b>' + esc(dec(k.musteri)) + '</b><small>' + esc(k.saleNo) + ' · ' + esc(k.urun || '') + ' · ' + esc(tarihSaat(k.ts)) + '</small></span>' +
       '<span class="gp">' + durumYazi(k) + '</span></button>').join('')
       : '<div class="gk" style="text-align:center;opacity:.8">Gönderilecek belge yok.</div>';
   }
   durum.gorunenIdler = idler;
-  const secBar = !yon ? '' : sm
-    ? '<div class="gh2" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span><b id="gnd-secn">' + durum.secim.size + '</b> seçili</span><button class="gl" data-g="sectum" style="width:auto;padding:6px 12px">Tümünü seç</button><button class="gl r" data-g="topluSil" style="width:auto;padding:6px 12px">🗑 Seçilenleri sil</button><button class="gl" data-g="secmod" style="width:auto;padding:6px 12px">Vazgeç</button></div>'
-    : (idler.length ? '<button class="gl" data-g="secmod" style="margin-bottom:8px">☑ Seç / toplu sil (yönetici)</button>' : '');
+  const hepsi = idler.length > 0 && idler.every(x => durum.secim.has(x));
+  const secBar = !yon || !idler.length ? ''
+    : '<div class="gh2" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:2"><button class="gx g" data-g="sectum" style="min-height:38px;padding:6px 12px">' + (hepsi ? '☐ Seçimi kaldır' : '☑ Tümünü seç') + '</button><button class="gx r" data-g="topluSil" style="min-height:38px;padding:6px 12px">🗑 Seçilenleri sil (<span id="gnd-secn">' + durum.secim.size + '</span>)</button></div>';
   o.innerHTML = baslik('Belge gönderimi (WhatsApp)') + '<div class="gb">' +
     '<div class="gt2">' + sekmeBtn('bekleyen', 'Bekleyen', L.length) + sekmeBtn('gonderilen', 'Gönderilen', durum.sonYuk ? sonY.length : null) + sekmeBtn('cikarilan', 'Çıkarılan', durum.cikYuk ? durum.cik.length : null) + (yon ? sekmeBtn('arsiv', 'Arşiv', durum.sonYuk ? arsiv.length : null) : '') + '</div>' +
     (uyari ? '<div class="gh2 e">' + esc(uyari) + '</div>' : '') +
@@ -242,7 +242,7 @@ async function hazirla(k) {
 function degis(e) { const t = e.target; if (t && t.id === 'gnd-dogru') { durum.dogru = t.checked; detayCiz(); } }
 
 async function sekmeYenile(sek) {
-  durum.sekme = sek; durum.secim.clear(); if (sek !== durum.sekmeOnce) durum.secimModu = false; durum.sekmeOnce = sek;
+  durum.sekme = sek; durum.secim.clear();
   try {
     if (sek === 'gonderilen' || sek === 'arsiv') { await sonGonderilenler(); durum.sonYuk = true; }
     else if (sek === 'cikarilan') { await cikarilanlar(); durum.cikYuk = true; }
@@ -280,8 +280,7 @@ async function tikla(e) {
     const k = kayitBul(durum.acik); if (k && k.pdf) hazirla(k);
     return detayCiz();
   }
-  if (g === 'secmod') { durum.secimModu = !durum.secimModu; durum.secim.clear(); return listeCiz(); }
-  if (g === 'sectum') { (durum.gorunenIdler || []).forEach(x => durum.secim.add(x)); return listeCiz(); }
+    if (g === 'sectum') { const ids = durum.gorunenIdler || []; if (ids.length && ids.every(x => durum.secim.has(x))) ids.forEach(x => durum.secim.delete(x)); else ids.forEach(x => durum.secim.add(x)); return listeCiz(); }
   if (g === 'topluSil') return topluSil();
   if (g === 'dogrudan') { durum.adim = 'sohbet'; return detayCiz(); }
   if (g === 'pdftekrar') { const k = kayitBul(durum.acik); durum.hazir = 'yok'; if (k) hazirla(k); return detayCiz(); }
@@ -321,7 +320,7 @@ async function topluSil() {
   for (const id of idler) { try { await b.deleteDoc(b.doc(b.db, COL, id)); basarili.push(id); } catch (_e) { hatali.push(id); } }
   const git = new Set(basarili);
   durum.liste = durum.liste.filter(x => !git.has(x.saleNo)); durum.son = durum.son.filter(x => !git.has(x.saleNo)); durum.cik = durum.cik.filter(x => !git.has(x.saleNo));
-  rozetN = durum.liste.length; rozetCiz(); durum.secim = new Set(hatali); durum.secimModu = hatali.length > 0;
+  rozetN = durum.liste.length; rozetCiz(); durum.secim = new Set(hatali);
   listeCiz(hatali.length ? basarili.length + ' kayıt silindi, ' + hatali.length + ' kayıt silinemedi (seçili kaldı).' : '');
   if (!hatali.length) { try { if (typeof window.showToast === 'function') window.showToast(basarili.length + ' kayıt silindi', 'info'); } catch (_e) { /* yoksay */ } }
 }
