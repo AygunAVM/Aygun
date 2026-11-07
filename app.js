@@ -208,7 +208,7 @@ if (localStorage.getItem('aygun_authmode') === '1') {
 // version.json'daki build alanı VE ana ekrandaki küçük sürüm rozeti.
 // Elle senkron tutmaya gerek yok — bump-version.sh script'i tek
 // komutla hepsini birden günceller (bkz. proje köküne eklenen script).
-const APP_BUILD_VERSION = 'V11.53-20261107-0232';
+const APP_BUILD_VERSION = 'V11.54-20261107-1403';
 console.log('%cAYGÜN AVM — app.js build: ' + APP_BUILD_VERSION, 'color:#1C1C1E;font-weight:bold;');
 
 // ✅ Rev 8.8 — 'V8.8-20260729-1927' → 'V8.8 · 29.07.2026 19:27' okunabilir
@@ -6234,10 +6234,14 @@ function _satisFormOku() {
 }
 
 // V11.36b: çift dokunma koruması — satış/teklif kaydı sürerken ikinci basış yok sayılır (çift satış + çift sevkiyat olmasın)
-let _finalizeMesgul = false;
+let _finalizeMesgul = false, _finalizeT0 = 0;
 async function finalizeAksiyon() {
-  if (_finalizeMesgul) return;
-  _finalizeMesgul = true;
+  // V11.54: kayıt sürerken basış sessizce yutulmaz (düğme "ölü" görünmesin); 25 sn'den uzun takılı kalan kilit kendiliğinden açılır
+  if (_finalizeMesgul) {
+    if (Date.now() - _finalizeT0 < 25000) { try { showToast('Satış kaydediliyor, lütfen bekleyin…', 'info'); } catch (_e) { /* yoksay */ } return; }
+    console.warn('finalizeAksiyon: önceki işlem 25 sn’den uzun sürdü, kilit açıldı');
+  }
+  _finalizeMesgul = true; _finalizeT0 = Date.now();
   try { await _finalizeAksiyonIc(); }
   finally { _finalizeMesgul = false; }
 }
@@ -6494,7 +6498,8 @@ async function _finalizeAksiyonIc() {
     // ✅ Rev 10.0: sevkiyat kaydı (aynı SAT-no ile) — hata satışı engellemez
     let _svkOk = false, _svkHata = '';
     if (svk && svk.ok) { try { await window.Sevkiyat.olustur(saleRecord, svk.veri, extraNote); _svkOk = true; } catch (_e) { _svkHata = _e && _e.message ? _e.message : 'bilinmeyen hata'; console.error('sevkiyat oluşturulamadı:', _e); } }
-    await logSessionResult('satis');
+    // V11.54: istatistik yazımı (Firestore onayı) ağ/çevrimdışı yüzünden takılırsa satış akışı (sevkiyat ekranına geçiş) beklemesin
+    try { await Promise.race([logSessionResult('satis'), new Promise(r => setTimeout(r, 2500))]); } catch (_e) { console.warn('logSessionResult:', _e && _e.message); }
     logAnalytics('sale', custName);
     incrementDailyStat('teklif_sayisi', 1).catch(() => {});
     incrementDailyStat('satis_sayisi',  1).catch(() => {});
@@ -6514,7 +6519,7 @@ async function _finalizeAksiyonIc() {
     if (_cm3) { _cm3.style.display='none'; _cm3.classList.remove('open'); }
     _clearAksiyonForm();
     // V11.14: satışı onayladıktan sonra çalışılan sevkiyatın detayına bağlan
-    if (_svkOk && window.Sevkiyat && window.Sevkiyat.detayAc) { try { await window.Sevkiyat.detayAc(saleNo); } catch (_) {} }
+    if (_svkOk && window.Sevkiyat && window.Sevkiyat.detayAc) { try { Promise.resolve(window.Sevkiyat.detayAc(saleNo)).catch(e => console.warn('sevkiyat detayı açılamadı:', e && e.message)); } catch (_) { /* yoksay */ } }   // V11.54: beklenmez (kilit takılmasın)
     // V11.36b: sevkiyat kaydı açılamadıysa satış kaydedilmiştir ama kullanıcı sessizce bırakılmasın
     if (_svkHata) await ayAlert('Satış kaydedildi (' + saleNo + ') ancak sevkiyat kaydı oluşturulamadı: ' + _svkHata + '\n\nYönetici Araçları → "Sevkiyat kaydı olmayan satışlar" bölümünden tamamlanabilir.');
     return;
