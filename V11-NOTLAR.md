@@ -486,3 +486,10 @@ Tüm dosyalar elle + araçla tarandı (sözdizimi, no-undef, ulaşılamayan kod,
 - Nakit satış belgesinde ödeme tablosundan "Liste Toplamı" ve "Satır İndirimleri" satırları kaldırıldı (yalnız Ödeme Şekli + Toplam Ödenecek). Teklif formunda aynen kalır.
 - Sevkiyat → Belgeler ve iletişim → "Satış sözleşmesi (PDF)": yönetici ve destek HER kayıtta (kapalı/iptal dahil, bu cihazda veri olmasa da) alabilir; satış personeli yalnız yetkili olduğu kayıtta (veya cihazda veri varsa). Cihazda saklı veri yoksa PDF satış kaydından (sales) yeniden kurulur; teslimat bölümü sevkiyat kaydındaki güncel değerle. Kayıt yoksa "Satış kaydı bulunamadı" uyarısı.
 - Testler: satış belgesi 31, musteri-duzelt-ui 23, lint temiz.
+
+## V11.61 (8 Kasım 2026) — SATIŞ SİGORTASI (kayıp satış olayı sonrası)
+- Olay: satış kullanıcısının sevkiyat/satış yazımı yerel kuyrukta takıldı, sunucuya hiç ulaşmadı; çerez/site verisi silinince kayıt yok oldu. Kök neden (cihaz/ağ/yetki) DOĞRULANMADI. Sistemik açık: yazma "gönder-unut" idi, başarısız olsa da personele başarılı görünüyordu.
+- Çözüm (app.js, `_ob*` işlevleri): satış onaylanır onaylanmaz tüm bilgi localStorage `aygun_outbox`'a yedeklenir → sunucu onayı beklenir (satış ≤5 sn; sevkiyat yazımı hatası izlenir) → onay yoksa KALICI kırmızı şerit (#outbox-banner: satış no, teknik hata kodu, "Çerez/site verisini SİLMEYİN", "Şimdi dene", "Bilgiyi kopyala") + "Satış sunucuya ULAŞMADI" uyarı kartı.
+- Otomatik tekrar: 20 sn → 2 dk aralıklı, internet gelince (`online`), uygulama açılışında (5 sn sonra). Tekrarda satış belgesi yazılır, `getDocFromServer` ile sevkiyat/WhatsApp kuyruğu sunucuda var mı doğrulanır; eksikse sessizce yeniden kurulur (var olan sunucu kaydı ezilmez). Tamamı doğrulanınca yedek silinir, şerit kalkar.
+- `fbSaveSale` artık hatayı yutmaz ({ok,kod} döner). `Sevkiyat.olusturSessiz`, `Sevkiyat.uyariKarti`, `satisYazimHatasi` köprüleri eklendi; sevkiyat "bekleyen kayıt" etiketine "çerez/site verisini silmeyin" notu.
+- Testler: outbox 11 (mantık) + outbox-serit 5 (tarayıcıda şerit), tüm eski testler geçti, lint temiz.
