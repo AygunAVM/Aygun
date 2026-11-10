@@ -299,7 +299,9 @@ export async function seriYukle(force) {
   if (!force && seriState.seriToBilgi && Date.now() - seriState.ts < SERI_TTL_MS) return;
   try {
     // V11.21: koşullu istek (304) — dosya değişmediyse 350 KB inmez ve yeniden ayrıştırılmaz
-    const r = await fetch(B().dataUrl('seriler.json'), { cache: 'no-cache' });
+    // V11.64: yavaş/asılı mobil bağlantıda 1 dk beklenmesin: 12 sn'de keser, bir kez daha dener
+    const getir = async () => { const ac = typeof AbortController !== 'undefined' ? new AbortController() : null, t = ac ? setTimeout(() => ac.abort(), 12000) : 0; try { return await fetch(B().dataUrl('seriler.json'), { cache: 'no-cache', signal: ac ? ac.signal : undefined }); } finally { if (t) clearTimeout(t); } };
+    let r; try { r = await getir(); } catch (_e1) { r = await getir(); }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const imza = r.headers.get('etag') || r.headers.get('last-modified') || '';
     if (imza && imza === seriState.imza && seriState.seriToBilgi) { seriState.ts = Date.now(); seriState.hata = false; return; }
@@ -597,7 +599,8 @@ export async function guncelle(s, yazOrFn, aksiyon, ek, secenek) {
 // ── Kayıt oluştur (satış tamamlanınca) ─────────────────────────
 // setDoc beklenmez (çevrimdışıyken sunucu onayı gelene dek askıda kalırdı);
 // yerel state hemen güncellenir, bekleyen yazma sayacı + hata kancası izler.
-export function olustur(sale, v, not) {
+// V11.63: kayıt üretimi ayrıldı — yazımı yapmaz (SDK takılırsa app.js doğrudan REST ile yazar)
+export function kayitUret(sale, v, not) {
   const b = B();
   const now = Date.now();
   const fo = sale.fiyat && sale.fiyat.odeme;
@@ -624,6 +627,11 @@ export function olustur(sale, v, not) {
     kalemler, depoZorunlu: !v.yetim && DEPOLAR.length > 0, kilitli: false, servisTeslim: null, teslimEdildi: null, iptal: false,
     durum: 'barkod_bekliyor', kapali: false, log: [logGir(v.yetim ? 'yetim_satistan_olusturuldu' : 'olusturuldu')]
   };
+  return kayit;
+}
+export function olustur(sale, v, not) {
+  const b = B();
+  const kayit = kayitUret(sale, v, not);
   const p = b.setDoc(b.doc(b.db, COL, sale.id), kayit);
   state.list.set(sale.id, kayit);
   const izleyen = bekleyenIzle(p, sale.id, true);

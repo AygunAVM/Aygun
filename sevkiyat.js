@@ -59,13 +59,13 @@ import {
   svkNo, SERVISLER, DEPOLAR, SAAT_DILIMLERI, saatSira, SATIS_NOKTALARI, tanimYukle, tanimKaydet, tanimDegisti, tanimTemizle, kalemDepoEksik, aralikListeyeYukle, musteriSorgula, DURUMLAR, FILTRELER, B, esc, bugun, yarin, tarihTR, zamanTR, tl,
   eposta, yonetici, depoYetkili, seriYetkili, kodAnahtar, kodEs, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
   state, kancalar, seriState, seriYukle, seriDogrula, seriSahibi, kalemSerisiz, bilinenOgren, durumEtiket, normSeri, cikisDurumu, tekYenile,
-  yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi, csvAyristir, iceAktarPlan, iceAktarYaz, telNorm, dec
-} from './sevkiyat-veri.js?v=V11.63-20261110-0738';
-import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.63-20261110-0738';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.63-20261110-0738';
-import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.63-20261110-0738';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.63-20261110-0738';
-import * as Talep from './sevkiyat-talep.js?v=V11.63-20261110-0738';
+  yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, kayitUret, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi, csvAyristir, iceAktarPlan, iceAktarYaz, telNorm, dec
+} from './sevkiyat-veri.js?v=V11.64-20261110-1731';
+import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.64-20261110-1731';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.64-20261110-1731';
+import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.64-20261110-1731';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.64-20261110-1731';
+import * as Talep from './sevkiyat-talep.js?v=V11.64-20261110-1731';
 
 const $ = id => document.getElementById(id);
 const SAYIM_MS = 4 * 60 * 1000;
@@ -663,7 +663,7 @@ const pesinAd = x => x === 'Teslimde' ? 'Teslimde nakit' : 'Peşin (' + (x || 'N
 function odemeSatirlari(f) {
   const o = f.odeme || {}, L = [];
   if (o.pesin > 0) L.push([pesinAd(o.pesinSekli), tl(o.pesin)]);
-  if (o.tip === 'nakit') { if (!(o.pesin > 0)) L.push(['Nakit', tl(o.toplam)]); }
+  if (o.tip === 'nakit') { if (!(o.pesin > 0)) L.push([o.sekil === 'EFT' ? 'EFT' : 'Nakit', tl(o.toplam)]); else L.push(['Kalan (' + (o.sekil === 'EFT' ? 'EFT' : 'Nakit') + ')', tl(Math.max(0, (Number(o.toplam) || 0) - o.pesin))]); }
   else if (o.tip === 'proje') L.push([o.kart || 'Kartlı ödeme', tl(o.toplam)]);
   else L.push([(o.kart || 'Kart') + (o.taksit > 1 ? ' · ' + o.taksit + ' taksit (' + o.taksit + ' × ' + tl(o.aylik) + ')' : ' · tek çekim'), tl(o.pesin > 0 ? o.kartTutar : o.toplam)]);
   return L;
@@ -1015,6 +1015,7 @@ async function seriKaydet(s, n, val, zorla) {   // zorla = { neden, tur } → y�
   }
   let hata = null;
   const kod = kalem.kod;
+  const bekleSeri = kalem.seriNo ? normSeri(kalem.seriNo) : '';   // V11.64: bu ekranın gördüğü seri; sunucuda başkası değiştirdiyse üzerine yazılmaz
   const ok = await guncelle(s, sunucu => {
     const dzl = duzeltme(sunucu);
     if (sunucu.kapali && !dzl) return { hata: 'Sevkiyat kapanmış; seri değiştirilemez.', tur: 'kapali' };
@@ -1023,6 +1024,7 @@ async function seriKaydet(s, n, val, zorla) {   // zorla = { neden, tur } → y�
     if (!dzl && kalemKilitli(sunucu, k)) return { hata: 'Bu ürün az önce teslim edildi; seri değiştirilemez.', tur: 'kilitli' };
     if (String(k.kod) !== String(kod)) return { hata: 'Bu satırdaki ürün başka bir cihazda değiştirilmiş. Ekran yenileniyor; seriyi yeniden okutun.', tur: 'eksik' };
     const eski = k.seriNo ? normSeri(k.seriNo) : '';
+    if (eski !== bekleSeri) return { hata: eski ? 'Bu satıra az önce başka biri seri girmiş (' + k.seriNo + '). Ekran yenileniyor; kontrol edip gerekirse yeniden girin.' : 'Bu satırdaki seri az önce başka biri tarafından silinmiş. Ekran yenileniyor; yeniden deneyin.', tur: 'eksik' };   // V11.64: iki kişi aynı anda seri girerse ikincisi sessizce üzerine yazmasın
     const yeni = val ? normSeri(val) : '';
     return {
       yaz: { ['kalemler.' + n + '.seriNo']: val },
@@ -1991,4 +1993,4 @@ async function detayAc(id) {
   return true;
 }
 window.Magaza = Magaza; window.Talep = Talep;
-window.Sevkiyat = { noktalar: () => SATIS_NOKTALARI.slice(), olusturSessiz: (sale, v, not) => olusturKayit(sale, v, not).kayit, uyariKarti: o => { stilEkle(); return diyalog({ ikon: 'alert', ...o }); }, detayAc, ac, kapat, geri, derinlik, formOku, olustur, belgeAc, durumHesapla, seriYukle, seriDogrula };
+window.Sevkiyat = { kayitHazirla: (sale, v, not) => kayitUret(sale, v, not), noktalar: () => SATIS_NOKTALARI.slice(), olusturSessiz: (sale, v, not) => olusturKayit(sale, v, not).kayit, uyariKarti: o => { stilEkle(); return diyalog({ ikon: 'alert', ...o }); }, detayAc, ac, kapat, geri, derinlik, formOku, olustur, belgeAc, durumHesapla, seriYukle, seriDogrula };
