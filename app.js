@@ -208,7 +208,7 @@ if (localStorage.getItem('aygun_authmode') === '1') {
 // version.json'daki build alanı VE ana ekrandaki küçük sürüm rozeti.
 // Elle senkron tutmaya gerek yok — bump-version.sh script'i tek
 // komutla hepsini birden günceller (bkz. proje köküne eklenen script).
-const APP_BUILD_VERSION = 'V11.64-20261110-1731';
+const APP_BUILD_VERSION = 'V11.67-20261111-1059';
 console.log('%cAYGÜN AVM — app.js build: ' + APP_BUILD_VERSION, 'color:#1C1C1E;font-weight:bold;');
 
 // ✅ Rev 8.8 — 'V8.8-20260729-1927' → 'V8.8 · 29.07.2026 19:27' okunabilir
@@ -3526,6 +3526,16 @@ function toggleCampaign(idx, campIdx) {
         return c && c.tip === 'birlesen' && c.grup === camp.grup && parseInt(ci) !== campIdx;
       });
       if (eskiBirlesen) delete item._selectedCamps[parseInt(eskiBirlesen[0])];
+      // V11.67: eşikli (esik≥2) ⎇ gruplar birbirini dışlar — yeni eşikli grup seçilince bu üründeki öteki eşikli grup kapanır (esik=1, ör. PAP, serbest)
+      if ((camp.esik || 1) >= 2) {
+        const kapanan = [];
+        Object.keys(item._selectedCamps).forEach(ci => {
+          if (!item._selectedCamps[ci]) return;
+          const c = item._campaigns[parseInt(ci)];
+          if (c && c.tip === 'birlesen' && (c.esik || 1) >= 2 && c.grup !== camp.grup) { delete item._selectedCamps[parseInt(ci)]; if (!kapanan.includes(c.grup)) kapanan.push(c.grup); }
+        });
+        if (kapanan.length) _campToast('Bu üründe ' + camp.grup + ' seçildi, ' + kapanan.join(', ') + ' kapatıldı; eşikli kampanyalardan yalnız biri uygulanır.', 'info');
+      }
     }
   }
 
@@ -3687,6 +3697,21 @@ function recalculateAllGroupCampaigns() {
       if (!item._pendingGroups) item._pendingGroups = {};
       item._pendingGroups['BAGIMSIZ'] = false;
     });
+  });
+
+  // V11.67: bir ürün aynı anda en fazla BİR eşikli (esik≥2) birleşen (⎇) gruba girer. Elle/eski kayıttan iki grup seçili gelirse
+  // tutarı yüksek olan (eşitte grup adı alfabetik) kalır, ötekinin seçimi kapanır. Eşiksiz (PAP) etkilenmez.
+  basket.forEach(item => {
+    if (!item._campaigns || !item._selectedCamps) return;
+    const es = Object.keys(item._selectedCamps).filter(ci => item._selectedCamps[ci] && (c => c && c.tip === 'birlesen' && (c.esik || 1) >= 2)(item._campaigns[parseInt(ci)]));
+    const gruplar = [...new Set(es.map(ci => item._campaigns[parseInt(ci)].grup))];
+    if (gruplar.length < 2) return;
+    gruplar.sort((x, y) => {
+      const tx = Math.max(...es.filter(ci => item._campaigns[parseInt(ci)].grup === x).map(ci => item._campaigns[parseInt(ci)].tutar || 0));
+      const ty = Math.max(...es.filter(ci => item._campaigns[parseInt(ci)].grup === y).map(ci => item._campaigns[parseInt(ci)].tutar || 0));
+      return ty - tx || (x < y ? -1 : 1);
+    });
+    es.forEach(ci => { if (item._campaigns[parseInt(ci)].grup !== gruplar[0]) delete item._selectedCamps[ci]; });
   });
 
   // Tüm seçili pill'leri grup bazında topla
@@ -3963,6 +3988,11 @@ function renderCampaignPills(item, idx) {
     }
     const kalanEsik = Math.max(0, esikGerekli - esikSecilen);
 
+    // V11.67: bu üründe BAŞKA bir eşikli ⎇ grup seçiliyse bu pill soluk görünür + "KEA seçili" notu (tıklanırsa takas olur)
+    const dislayan = (!sel && camp.tip === 'birlesen' && (camp.esik || 1) >= 2)
+      ? (() => { const x = Object.keys(item._selectedCamps || {}).find(ci2 => { if (!item._selectedCamps[ci2]) return false; const c2 = item._campaigns[parseInt(ci2)]; return c2 && c2.tip === 'birlesen' && (c2.esik || 1) >= 2 && c2.grup !== camp.grup; }); return x === undefined ? '' : item._campaigns[parseInt(x)].grup; })()
+      : '';
+
     // Stil
     let style;
     if (isBilgi) {
@@ -3977,7 +4007,7 @@ function renderCampaignPills(item, idx) {
       const tarihDolmus = camp.sonTarih && new Date() > camp.sonTarih;
       style = tarihDolmus
         ? `background:#f1f5f9;color:#94a3b8;border-bottom:1.5px solid #e2e8f0;font-weight:600;cursor:not-allowed;text-decoration:line-through;opacity:.55;`
-        : `background:${pal.bg};color:${pal.unsel};border-bottom:1.5px solid ${pal.line};font-weight:600;cursor:pointer;`;
+        : `background:${pal.bg};color:${pal.unsel};border-bottom:1.5px solid ${pal.line};font-weight:600;cursor:pointer;` + (dislayan ? 'opacity:.55;filter:saturate(.35);' : '');
     }
 
     const baseStyle = `display:inline-flex;align-items:center;gap:3px;padding:3px 9px 4px;`
@@ -4001,6 +4031,8 @@ function renderCampaignPills(item, idx) {
     if (!isBilgi && esikGerekli >= 2) {
       if (sel && pending && kalanEsik > 0) {
         pillRozet = `<span style="font-size:.50rem;background:#d97706;color:#fff;padding:1px 4px;border-radius:3px;font-weight:800;margin-left:3px;flex-shrink:0">+${kalanEsik}</span>`;
+      } else if (!sel && dislayan) {
+        pillRozet = `<span style="font-size:.48rem;font-weight:700;background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:99px;margin-left:3px;flex-shrink:0">${_esc(dislayan)} seçili</span>`;
       } else if (!sel) {
         pillRozet = `<span style="font-size:.48rem;background:rgba(0,0,0,.10);color:inherit;padding:1px 4px;border-radius:3px;font-weight:700;margin-left:2px;opacity:.75;flex-shrink:0">x${esikGerekli}</span>`;
       }
@@ -5246,21 +5278,66 @@ function _calcAbakusNakit(resEl, nakitTam, pesin, pesinSekli) {
   }
 }
 
-// ═══ SATIŞ NO (V11.63) ══════════════════════════════════════════
-// Biçim (10 karakter, elle yazması kolay): AYG + ödeme harfi + GGAA + 2 haneli sıra.   Örn. AYGE101101
-//   K = Kart (peşin+kart karışık da K) · T = Tüketici kredisi · N = Nakit · E = EFT
-// Sıra, aynı gün + aynı harf için 01…99 (aşılırsa 2 karakterli harf-rakam sırası). Benzersizlik: satisNoRez/{no} kaydı transaction ile
-// rezerve edilir (iki cihaz aynı anda aynı no'yu alamaz); çevrimdışı/zaman aşımında yerel kayıtlara bakılarak devam edilir.
+// ═══ SATIŞ NO (V11.65) ══════════════════════════════════════════
+// YENİ biçim (14 karakter): AYG + MAĞAZA HARFİ(1) + ÖDEME HARFİ(1) + YYMMDD(6) + SIRA(2) + KONTROL(1).   Örn. AYGFE26111001X
+//   Ödeme harfi: K = Kart (peşin+kart de K) · T = Tüketici kredisi · N = Nakit · E = EFT (karma nakitte parçalardan biri EFT ise E)
+//   Mağaza harfi: Admin → 🏦 Banka → “Mağaza harfleri” (meta/magazaHarfleri). Tanımsız satış noktası = X. PERSONEL numarada YOK.
+//   Sıra: mağaza + gün + ödeme harfi başına 01–99, sonra harf+karakter (AA…). Benzersizlik: satisNoRez/{no} transaction ile rezerve edilir;
+//   çevrimdışı/zaman aşımında yerel kayıtlara bakılarak devam edilir (sıranın 50–99 aralığı).
+//   Kontrol karakteri: önceki 13 karakterden ağırlıklı toplam mod 31; numarada yalnız 31 karakter kullanılır (0-9 ve I O Q W Z dışındaki harfler) → tek karakter hatası ve yan yana iki karakterin yer değişimi her zaman yakalanır. O→0, I→1 yazımı düzeltilir.
+// ESKİ numaralar (AYG+harf+GGAA+2 = 10 karakter ve SAT-…) DEĞİŞMEZ; arama/gösterim ikisini de tanır.
+// NOT: sevkiyat-veri.js içindeki satisNoCoz kuralı bu bölümle AYNI olmalı (test/satis-no-testi.js ikisini karşılaştırır).
+const SN_VERI = '0123456789ABCDEFGHJKLMNPRSTUVXY', SN_KONTROL = SN_VERI, SN_HARFLER = 'ABCDEFGHJKLMNPRSTUVY';   // SN_HARFLER: atanabilir mağaza harfleri (X = tanımsız, ayrılmış)
+function satisNoKontrol(g13) {
+  let t = 0; const s = String(g13);
+  if (s.length !== 13) return '';
+  for (let i = 0; i < 13; i++) { const v = SN_VERI.indexOf(s[i]); if (v < 0) return ''; t += (i + 1) * v; }
+  return SN_KONTROL[t % 31];
+}
 function _satisNoHarf(sel, ek) {
   if (!sel) return ek && (ek.sekil === 'EFT' || (ek.pesin > 0 && ek.pesinSekli === 'EFT')) ? 'E' : 'N';
   if (sel.type === 'proje') return 'K';
   return sel.tip === 'kredi' ? 'T' : 'K';
 }
-function satisNoOnek(harf, d) {
-  const p = n => String(n).padStart(2, '0'); d = d || new Date();
-  return 'AYG' + harf + p(d.getDate()) + p(d.getMonth() + 1);
+const SATIS_NO_RE = /^AYG(?:[KTNE]\d{4}[0-9A-Z]{2}|[A-HJ-NPR-VXY][KTNE]\d{6}[0-9A-HJ-NPR-VXY]{2}[0-9A-HJ-NPR-VXY])$/;   // iki biçim: eski 10 karakter + yeni 14 karakter
+const SATIS_NO_YENI_RE = /^AYG[A-HJ-NPR-VXY][KTNE]\d{6}[0-9A-HJ-NPR-VXY]{2}[0-9A-HJ-NPR-VXY]$/;
+const satisNoGecerli = no => { const s = String(no || ''); return SATIS_NO_YENI_RE.test(s) && satisNoKontrol(s.slice(0, 13)) === s[13]; };
+const _snPad = n => String(n).padStart(2, '0');
+function satisNoOnek(harf, d, magaza) {   // yeni biçim: 11 karakterlik önek (AYG + mağaza + ödeme + YYMMDD)
+  d = d || new Date();
+  return 'AYG' + (magaza || 'X') + harf + _snPad(d.getFullYear() % 100) + _snPad(d.getMonth() + 1) + _snPad(d.getDate());
 }
-const SATIS_NO_RE = /^AYG[KTNE]\d{4}[0-9A-Z]{2}$/;
+function satisNoOnekEski(harf, d) {   // yalnız “eski satışlara numara ata” için (eski 10 karakterlik biçim)
+  d = d || new Date();
+  return 'AYG' + harf + _snPad(d.getDate()) + _snPad(d.getMonth() + 1);
+}
+function _snSira(n) {   // 1–99 → 01–99; sonrası harf + karakter (AA, AB…); her zaman harfle başladığı için 01–99 ile karışmaz
+  if (n <= 99) return _snPad(n);
+  const k = n - 100, L = SN_VERI.slice(10);
+  return L[Math.floor(k / 31) % 21] + SN_VERI[k % 31];
+}
+const SN_SIRA_SON = 99 + 21 * 31;
+// Mağaza harfleri: meta/magazaHarfleri { harfler: { 'NF': 'F', … } } — yalnız yönetici yazar
+const MHARF_DOC = ['meta', 'magazaHarfleri'], MHARF_LS = 'aygun_mharf', MHARF_TTL = 30 * 60 * 1000;
+window._magazaHarfleri = window._magazaHarfleri || {};
+function _mharfTemizle(h) {
+  const o = {}, g = new Set();
+  Object.keys(h && typeof h === 'object' ? h : {}).forEach(k => { const v = String(h[k] || '').toLocaleUpperCase('en-US').trim(); if (v.length === 1 && SN_HARFLER.includes(v) && !g.has(v)) { o[k] = v; g.add(v); } });
+  return o;
+}
+async function magazaHarfleriYukle(force) {
+  try {
+    const o = JSON.parse(localStorage.getItem(MHARF_LS) || 'null');
+    if (o && o.harfler) window._magazaHarfleri = _mharfTemizle(o.harfler);
+    if (!force && o && Date.now() - o.ts < MHARF_TTL) return true;
+    const sn = await getDoc(doc(_db, MHARF_DOC[0], MHARF_DOC[1]));
+    const h = sn.exists() && sn.data().harfler ? sn.data().harfler : {};
+    window._magazaHarfleri = _mharfTemizle(h);
+    try { localStorage.setItem(MHARF_LS, JSON.stringify({ ts: Date.now(), harfler: h })); } catch (_e) { /* yoksay */ }
+    return true;
+  } catch (e) { console.warn('magazaHarfleriYukle:', e && e.message); return false; }
+}
+const _satisNoMagazaHarf = nokta => (nokta && window._magazaHarfleri && window._magazaHarfleri[nokta]) || 'X';
 async function _satisNoRezerve(no) {   // true = bizim; false = dolu; null = bilinmiyor (çevrimdışı / zaman aşımı)
   try {
     const ref = doc(_db, 'satisNoRez', no);
@@ -5268,24 +5345,24 @@ async function _satisNoRezerve(no) {   // true = bizim; false = dolu; null = bil
     return await Promise.race([is, new Promise(r => setTimeout(() => r(null), 4000))]);
   } catch (e) { console.warn('satisNoRezerve:', e && e.message); return null; }
 }
-async function satisNoUret(harf) {
-  const onek = satisNoOnek(harf), yerel = new Set((sales || []).map(x => String((x && (x.id || x.saleNo)) || '')));
-  for (let n = 1; n <= 1295; n++) {
-    const sira = n <= 99 ? String(n).padStart(2, '0') : (n.toString(36).toUpperCase().padStart(2, '0'));
-    const no = onek + sira;
-    if (n >= 100 && /^\d\d$/.test(sira)) continue;   // 01–99 ile karışmasın
+async function satisNoUret(harf, nokta) {
+  try { await Promise.race([magazaHarfleriYukle(), new Promise(r => setTimeout(r, 3000))]); } catch (_e) { /* yerel kopya / X ile devam */ }
+  const onek = satisNoOnek(harf, new Date(), _satisNoMagazaHarf(nokta)), tam = s => onek + s + satisNoKontrol(onek + s);
+  const yerel = new Set((sales || []).map(x => String((x && (x.id || x.saleNo)) || '')));
+  for (let n = 1; n <= SN_SIRA_SON; n++) {
+    const no = tam(_snSira(n));
     if (yerel.has(no)) continue;
     const r = await _satisNoRezerve(no);
     if (r === false) continue;
     if (r === null) {   // sunucuya ulaşılamadı: başka cihazın 01,02… almış olması olasılığına karşı sıranın üst aralığından (50–99) boş olanı al
       const bas = 50 + Math.floor(Math.random() * 50);
-      for (let i = 0; i < 50; i++) { const c = onek + String(50 + (bas - 50 + i) % 50); if (!yerel.has(c)) return c; }
+      for (let i = 0; i < 50; i++) { const c = tam(String(50 + (bas - 50 + i) % 50)); if (!yerel.has(c)) return c; }
     }
     return no;
   }
-  return onek + String(Date.now() % 100).padStart(2, '0');   // ulaşılmaz son çare
+  return tam(_snPad(Date.now() % 100));   // ulaşılmaz son çare
 }
-window._satisNoOnek = satisNoOnek;
+window._satisNoOnek = satisNoOnek; window.satisNoGecerli = satisNoGecerli; window.satisNoKontrol = satisNoKontrol;
 
 // Eski satışlara AYG numarası ata (tek seferlik, yönetici). İç kimlik (SAT-…) DEĞİŞMEZ; sales + sevkiyatlar kaydına 'satisNo' alanı eklenir.
 function _eskiSatisHarf(x) {
@@ -5296,7 +5373,7 @@ function _eskiSatisHarf(x) {
 }
 async function eskiSatislaraNoAta() {
   const durum = document.getElementById('bk-no-durum'), yaz = t => { if (durum) durum.textContent = t; };
-  if (!(await ayConfirm('Eski satışlara AYG satış numarası atansın mı?\n\nİç kayıt kimliği (SAT-…) değişmez; ekranlarda yeni numara görünür, eski numarayla da aranır. Bu işlem birkaç dakika sürebilir ve geri alınmaz.'))) return;
+  if (!(await ayConfirm('Numarası olmayan eski satışlara ESKİ kısa biçimde (AYGE101101) satış numarası atansın mı?\n\nİç kayıt kimliği (SAT-…) değişmez; ekranlarda bu numara görünür, SAT-… ile de aranır. Yeni 14 karakterli biçim eski satışlara verilmez. Bu işlem birkaç dakika sürebilir ve geri alınmaz.'))) return;
   try {
     yaz('Satışlar okunuyor…');
     const sn = await getDocs(collection(_db, 'sales'));
@@ -5307,7 +5384,7 @@ async function eskiSatislaraNoAta() {
     if (!bekleyen.length) { yaz('Numara atanacak eski satış yok.'); return; }
     const sayac = {}, atama = [];
     for (const x of bekleyen) {
-      const t = new Date(x.ts || Date.now()), on = satisNoOnek(_eskiSatisHarf(x), isNaN(t) ? new Date() : t);
+      const t = new Date(x.ts || Date.now()), on = satisNoOnekEski(_eskiSatisHarf(x), isNaN(t) ? new Date() : t);
       let n = sayac[on] || 0, no;
       do { n++; no = on + (n <= 99 ? String(n).padStart(2, '0') : n.toString(36).toUpperCase().padStart(2, '0')); } while (dolu.has(no) && n < 1295);
       sayac[on] = n; dolu.add(no); atama.push({ id: x.id, no });
@@ -5326,11 +5403,11 @@ async function eskiSatislaraNoAta() {
 window.eskiSatislaraNoAta = eskiSatislaraNoAta;
 
 // ── Admin → 🏦 Banka sekmesi ──
-let _bkTaslak = [];
+let _bkTaslak = [], _mhTaslak = {};
 function _bkNoktalar() { try { const l = window.Sevkiyat && window.Sevkiyat.noktalar && window.Sevkiyat.noktalar(); if (l && l.length) return l; } catch (_e) { /* yoksay */ } return ['SP', 'NF', 'VŞ', 'SÇ', 'Diğer']; }
 async function renderAdminBanka(yenile) {
   const el = document.getElementById('admin-banka-body'); if (!el) return;
-  if (yenile !== false) { el.innerHTML = '<div class="admin-empty">Yükleniyor…</div>'; await bankalariYukle(true); _bkTaslak = JSON.parse(JSON.stringify(window._bankalarHam || [])).map(b => ({ id: b.id || ('b' + Math.random().toString(36).slice(2, 8)), ad: b.ad || '', iban: b.iban || '', aktif: b.aktif !== false, varsayilan: Array.isArray(b.varsayilan) ? b.varsayilan : [] })); }
+  if (yenile !== false) { el.innerHTML = '<div class="admin-empty">Yükleniyor…</div>'; await bankalariYukle(true); await magazaHarfleriYukle(true); _mhTaslak = Object.assign({}, window._magazaHarfleri); _bkTaslak = JSON.parse(JSON.stringify(window._bankalarHam || [])).map(b => ({ id: b.id || ('b' + Math.random().toString(36).slice(2, 8)), ad: b.ad || '', iban: b.iban || '', aktif: b.aktif !== false, varsayilan: Array.isArray(b.varsayilan) ? b.varsayilan : [] })); }
   const nk = _bkNoktalar();
   el.innerHTML = '<div style="padding:4px 2px 10px;font-size:.8rem;color:#71717a">EFT satışlarında seçilecek hesaplar. Satış kaydına hesap <b>adı + IBAN o günkü haliyle</b> yazılır; hesabı sonradan pasife alsanız/silseniz eski satışlar değişmez. “Mağaza hesabı” işaretli noktada o hesap hazır seçili gelir.</div>'
     + _bkTaslak.map((b, i) => '<div class="bk-satir' + (b.aktif ? '' : ' pasif') + '"><input type="text" class="bk-ad" placeholder="Banka adı" maxlength="40" value="' + _bEsc(b.ad) + '" oninput="bkAlan(' + i + ',\'ad\',this.value)">'
@@ -5338,9 +5415,29 @@ async function renderAdminBanka(yenile) {
       + '<button type="button" class="bk-btn ' + (b.aktif ? '' : 'gri') + '" onclick="bkAktif(' + i + ')">' + (b.aktif ? '✓ Aktif' : 'Pasif') + '</button><button type="button" class="bk-btn gri" onclick="bkSil(' + i + ')">Sil</button>'
       + '<div class="bk-chips">Mağaza hesabı:' + nk.map(n => '<button type="button" class="bk-chip' + (b.varsayilan.includes(n) ? ' on' : '') + '" onclick="bkNokta(' + i + ',\'' + _bEsc(n).replace(/'/g, '') + '\')">' + _bEsc(n) + '</button>').join('') + '</div></div>').join('')
     + '<div id="bk-hata" class="bk-hata"></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="bk-btn" onclick="bkEkle()">＋ Hesap ekle</button><button type="button" class="bk-btn kirmizi" onclick="bkKaydet()">Kaydet</button></div>'
-    + '<div style="margin-top:22px;padding-top:14px;border-top:1px solid #e4e4e8"><b style="font-size:.9rem">Satış numaraları</b><div style="font-size:.78rem;color:#71717a;margin:4px 0 8px">Yeni satışlar <b>AYG</b>+ödeme harfi+GGAA+sıra alır (örn. AYGE101101). Eski satışlara da aynı biçimde numara vermek için bir kez çalıştırın.</div><button type="button" class="bk-btn" onclick="eskiSatislaraNoAta()">Eski satışlara numara ata</button><div id="bk-no-durum" style="font-size:.8rem;margin-top:8px"></div></div>';
+    + '<div style="margin-top:22px;padding-top:14px;border-top:1px solid #e4e4e8"><b style="font-size:.9rem">Mağaza harfleri</b><div style="font-size:.78rem;color:#71717a;margin:4px 0 8px">Satış numarasının 4. harfi (örn. AYG<b>F</b>E26111001X). Her satış noktasına <b>farklı bir harf</b> verin. Kullanılabilir harfler: ' + SN_HARFLER.split('').join(' ') + ' (0, 1, I, O, Q, W, Z yasak — karışır; X de yasak: “tanımsız” demektir). Harf sonradan değişirse eski numaralar değişmez. Harfi olmayan satış noktası <b>X</b> alır.</div>'
+    + nk.map(n => '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="min-width:90px;font-size:.85rem">' + _bEsc(n) + '</span><input type="text" class="bk-ad" style="width:56px;text-align:center;text-transform:uppercase" maxlength="1" placeholder="—" value="' + _bEsc(_mhTaslak[n] || '') + '" oninput="mhAlan(\'' + _bEsc(n).replace(/'/g, '') + '\',this.value)"></div>').join('')
+    + '<div id="mh-hata" class="bk-hata"></div><button type="button" class="bk-btn kirmizi" onclick="mhKaydet()">Harfleri kaydet</button></div>'
+    + '<div style="margin-top:22px;padding-top:14px;border-top:1px solid #e4e4e8"><b style="font-size:.9rem">Satış numaraları</b><div style="font-size:.78rem;color:#71717a;margin:4px 0 8px">Yeni satışlar 14 karakterli numara alır (örn. AYGFE26111001X). Eski numaralar (AYGE101101, SAT-…) <b>değişmez</b>. Aşağıdaki düğme yalnız numarası hiç olmayan SAT-… satışlara <b>eski kısa biçimde</b> (AYGE101101) numara verir; gerekmiyorsa çalıştırmayın.</div><button type="button" class="bk-btn" onclick="eskiSatislaraNoAta()">Eski satışlara numara ata</button><div id="bk-no-durum" style="font-size:.8rem;margin-top:8px"></div></div>';
 }
 window.renderAdminBanka = renderAdminBanka;
+window.mhAlan = (n, v) => { const h = String(v || '').toLocaleUpperCase('en-US').trim(); if (h) _mhTaslak[n] = h; else delete _mhTaslak[n]; };
+window.mhKaydet = async () => {
+  const hata = m => { const e = document.getElementById('mh-hata'); if (e) e.textContent = m; };
+  const g = {};
+  for (const n of Object.keys(_mhTaslak)) {
+    const h = _mhTaslak[n];
+    if (!(h.length === 1 && SN_HARFLER.includes(h))) return hata(n + ': “' + h + '” kullanılamaz. Geçerli harfler: ' + SN_HARFLER.split('').join(' ') + ' (0, 1, I, O, Q, W, Z, X yasak).');
+    if (g[h]) return hata('“' + h + '” harfi iki satış noktasına verilmiş (' + g[h] + ', ' + n + '). Her noktaya farklı harf verin.');
+    g[h] = n;
+  }
+  try {
+    await setDoc(doc(_db, MHARF_DOC[0], MHARF_DOC[1]), { harfler: _mhTaslak, ts: Date.now(), guncelleyen: (currentUser && (currentUser.Email || currentUser.email)) || '' });
+    window._magazaHarfleri = _mharfTemizle(_mhTaslak);
+    try { localStorage.setItem(MHARF_LS, JSON.stringify({ ts: Date.now(), harfler: _mhTaslak })); } catch (_e) { /* yoksay */ }
+    hata(''); haptic(30); ayAlert('✅ Mağaza harfleri kaydedildi. Cihazlar en geç 30 dakika içinde (ya da yenilenince) yeni harfleri kullanır.');
+  } catch (e) { hata('Kaydedilemedi: ' + (e && e.message ? e.message : e) + ' — Firestore kuralları (ASAMA-G) yayınlı olmalı.'); }
+};
 window.bkAlan = (i, k, v) => { if (_bkTaslak[i]) _bkTaslak[i][k] = k === 'iban' ? _ibanDuz(v) : v; };
 window.bkAktif = i => { if (_bkTaslak[i]) { _bkTaslak[i].aktif = !_bkTaslak[i].aktif; renderAdminBanka(false); } };
 window.bkSil = async i => { if (_bkTaslak[i] && await ayConfirm('Bu hesap silinsin mi?\n\nEski satışlardaki banka bilgisi değişmez.')) { _bkTaslak.splice(i, 1); renderAdminBanka(false); } };
@@ -6895,7 +6992,8 @@ async function _finalizeAksiyonIc() {
       if (!_devam) return;
     }
 
-    const saleNo = await satisNoUret(_satisNoHarf(abakusSelection, _abOdemeEk(abakusSelection)));   // V11.63: AYG + ödeme harfi + GGAA + sıra
+    const _satisNokta = (svk && svk.veri && svk.veri.nokta) || _abNokta();   // V11.65: mağaza harfi için satış noktası
+    const saleNo = await satisNoUret(_satisNoHarf(abakusSelection, _abOdemeEk(abakusSelection)), _satisNokta);   // V11.65: AYG + mağaza + ödeme + YYMMDD + sıra + kontrol
 
     let odemeTipi = 'nakit',
       kartAdi = '',
@@ -6951,6 +7049,7 @@ async function _finalizeAksiyonIc() {
     const saleRecord = {
       id: saleNo,
       satisNo: saleNo,
+      satisNoktasi: _satisNokta,   // V11.65: arama sonucunda mağaza görünsün (sevkiyat kaydı olmayan satışlarda da)
       ts: new Date().toISOString(),
       custName,
       custTC: tc,
@@ -14256,38 +14355,58 @@ function optimizeCampaigns(opts) {
     });
   });
 
-  // 3. Birlesen potansiyeli — verilen ürün seti hariç
-  function birlesenPot(haricSet) {
+  // 3. Birleşen (⎇) planı — V11.67: eşikli (esik≥2) birleşen gruplar BİRBİRİNİ DIŞLAR: bir ürün aynı anda en fazla BİR eşikli ⎇ gruba girer
+  //    (esik=1, ör. PAP, serbest). Aynı ürünü paylaşan eşikli gruplar arasında toplam indirimi yüksek olan seçilir
+  //    (eşitlikte: önce tutarı yüksek, sonra grup adı alfabetik). Hem kilitli karar hesabı hem son atama bu tek fonksiyonu kullanır.
+  function turlar(list, esik, mustR) {
+    const u = {};
+    list.forEach(k => { if (!u[k.bi] || k.camp.tutar > u[k.bi].camp.tutar) u[k.bi] = k; });
+    const l = Object.values(u);
+    const hANY = l.every(k => !k.camp.rol || k.camp.rol === 'ANY');
+    const out = [];
+    if (hANY) { for (let i = 0; i + esik <= l.length; i += esik) out.push(l.slice(i, i + esik)); return out; }
+    let kalan = [...l];
+    while (kalan.length >= esik) {
+      const H = new Set(), U = new Set(), cift = [], rest = [];
+      for (const k of kalan) {
+        const r = k.camp.rol || 'ANY';
+        if (!H.has(r) && !U.has(k.bi) && cift.length < esik) { cift.push(k); H.add(r); U.add(k.bi); }
+        else rest.push(k);
+      }
+      if (cift.length === esik) {
+        if (mustR && !cift.some(k => (k.camp.rol || 'ANY') === mustR)) break; // zorunlu rol yok — geçersiz tur
+        out.push(cift); kalan = rest;
+      } else break;
+    }
+    return out;
+  }
+  function birlesenPlan(haricSet, dolu) {
     const grpMap = {};
     adaylar.forEach(k => {
       if (k.camp.tip !== 'birlesen' || haricSet.has(k.bi)) return;
-      const g = k.camp.grup;
-      if (!grpMap[g]) grpMap[g] = [];
-      grpMap[g].push(k);
+      (grpMap[k.camp.grup] = grpMap[k.camp.grup] || []).push(k);
     });
-    let t = 0;
-    Object.values(grpMap).forEach(list => {
-      const esik = list[0].camp.esik||1;
-      const tutar = Math.max(...list.map(k => k.camp.tutar));
-      const mustR = optMustRol[list[0].camp.grup] || null;
-      if (esik === 1) { t += list.reduce((s,k) => s+k.camp.tutar, 0); return; }
-      let c = 0, kalan = [...list];
-      while (kalan.length >= esik) {
-        const H=new Set(), U=new Set(), cift=[], rest=[];
-        for (const k of kalan) {
-          const r = k.camp.rol||'ANY';
-          if (!H.has(r) && !U.has(k.bi) && cift.length < esik) { cift.push(k); H.add(r); U.add(k.bi); }
-          else rest.push(k);
-        }
-        if (cift.length === esik) {
-          if (mustR && !cift.some(k => (k.camp.rol||'ANY') === mustR)) break; // zorunlu rol yok — geçersiz tur
-          c++; kalan = rest;
-        } else break;
-      }
-      t += c * tutar;
+    let toplam = 0; const atamalar = [], esikli = [], kul = new Set(dolu || []);
+    Object.entries(grpMap).forEach(([g, list]) => {
+      const esik = list[0].camp.esik || 1;
+      if (esik === 1) { list.forEach(k => { toplam += k.camp.tutar; atamalar.push(k); }); return; }
+      esikli.push({ g, list, esik, tutar: Math.max(...list.map(k => k.camp.tutar)), mustR: optMustRol[g] || null });
     });
-    return t;
+    while (esikli.length) {
+      let best = null;
+      esikli.forEach(G => {
+        G.turlar = turlar(G.list.filter(k => !kul.has(k.bi)), G.esik, G.mustR);
+        G.deger = G.turlar.length * G.tutar;
+        if (!best || G.deger > best.deger || (G.deger === best.deger && (G.tutar > best.tutar || (G.tutar === best.tutar && G.g < best.g)))) best = G;
+      });
+      if (!best || best.deger <= 0) break;
+      best.turlar.forEach(t => t.forEach(k => { kul.add(k.bi); atamalar.push(k); }));
+      toplam += best.deger;
+      esikli.splice(esikli.indexOf(best), 1);
+    }
+    return { toplam, atamalar };
   }
+  function birlesenPot(haricSet) { return birlesenPlan(haricSet, new Set()).toplam; }
 
   // 4. Tüm mümkün kilitli çiftleri bul
   const kilitliGruplar = {};
@@ -14332,12 +14451,13 @@ function optimizeCampaigns(opts) {
     const d = urunDurum[k.bi]; if (!d) return true;
     if (k.camp.tip === 'kilitli') { if (d.ki || (d.bg && d.bg.size>0)) return false; }
     if (k.camp.tip === 'birlesen' && d.ki) return false;
+    if (k.camp.tip === 'birlesen' && (k.camp.esik || 1) >= 2 && d.bgE && d.bgE.size > 0 && !d.bgE.has(k.camp.grup)) return false;   // V11.67: ürün başına tek eşikli ⎇ grup
     return true;
   }
   function ata(k) {
-    if (!urunDurum[k.bi]) urunDurum[k.bi] = { ki: false, bg: new Set() };
+    if (!urunDurum[k.bi]) urunDurum[k.bi] = { ki: false, bg: new Set(), bgE: new Set() };
     if (k.camp.tip === 'kilitli') urunDurum[k.bi].ki = true;
-    if (k.camp.tip === 'birlesen') urunDurum[k.bi].bg.add(k.camp.grup);
+    if (k.camp.tip === 'birlesen') { urunDurum[k.bi].bg.add(k.camp.grup); if ((k.camp.esik || 1) >= 2) urunDurum[k.bi].bgE.add(k.camp.grup); }
     sonSecimler.push(k);
   }
 
@@ -14383,49 +14503,8 @@ function optimizeCampaigns(opts) {
     }
   }
 
-  // 6. Kalan ürünlere birlesen kampanyaları uygula
-  const bGrpMap = {};
-  adaylar.forEach(k => {
-    if (k.camp.tip !== 'birlesen') return;
-    const g = k.camp.grup;
-    if (!bGrpMap[g]) bGrpMap[g] = [];
-    bGrpMap[g].push(k);
-  });
-
-  function bPot(list) {
-    const esik = list[0].camp.esik||1, tutar = Math.max(...list.map(k=>k.camp.tutar));
-    if (esik === 1) return list.filter(k=>atanabilir(k)).reduce((s,k)=>s+k.camp.tutar, 0);
-    return Math.floor(new Set(list.filter(k=>atanabilir(k)).map(k=>k.bi)).size/esik)*tutar;
-  }
-
-  Object.entries(bGrpMap).sort((a,b) => bPot(b[1])-bPot(a[1])).forEach(([,list]) => {
-    const esik = list[0].camp.esik||1;
-    const mustR = optMustRol[list[0].camp.grup] || null;
-    const hANY = list.every(k => !k.camp.rol || k.camp.rol==='ANY');
-    if (esik === 1) { list.forEach(k => { if (atanabilir(k)) ata(k); }); return; }
-    function eI() {
-      const u={};
-      list.filter(k=>atanabilir(k)).forEach(k=>{const key=k.bi+'|'+k.camp.grup;if(!u[key]||k.camp.tutar>u[key].camp.tutar)u[key]=k;});
-      return Object.values(u);
-    }
-    if (hANY) { const l=eI(); for(let i=0;i+esik<=l.length;i+=esik) l.slice(i,i+esik).forEach(k=>ata(k)); }
-    else {
-      let kalan=eI();
-      while (kalan.length >= esik) {
-        const H=new Set(), U=new Set(), cift=[], rest=[];
-        for (const k of kalan) {
-          const r=k.camp.rol||'ANY';
-          if (!H.has(r)&&!U.has(k.bi)&&cift.length<esik) { cift.push(k); H.add(r); U.add(k.bi); }
-          else rest.push(k);
-        }
-        if (cift.length===esik) {
-          if (mustR && !cift.some(k => (k.camp.rol||'ANY') === mustR)) break; // zorunlu rol yok — geçersiz tur
-          cift.forEach(k=>ata(k)); kalan=rest.filter(k=>atanabilir(k));
-        }
-        else break;
-      }
-    }
-  });
+  // 6. Kalan ürünlere birleşen kampanyaları uygula (V11.67: eşikli gruplar ürün başına tek; bkz. birlesenPlan)
+  birlesenPlan(kilitliAtanmisBiSet(), new Set()).atamalar.forEach(k => ata(k));
 
   // 7. Uygula
   if (!sonSecimler.length) {
