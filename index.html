@@ -79,6 +79,9 @@
 .ab-nakit-kart.ab-row-sel small{color:#d4d4d8!important;opacity:1;font-size:.68rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding-right:34px}
 .ab-nakit-kart.ab-row-sel b{color:#fff!important;font-size:1.9rem;font-variant-numeric:tabular-nums;margin-top:2px}
 .ab-nakit-kart.ab-row-sel s{color:#a1a1aa!important;opacity:1}
+.ab-nakit-kart.ab-row-sel em{display:block;margin-top:4px;font-style:normal;font-size:.78rem;font-weight:600;color:#d4d4d8}
+.ab-nakit-ayni{margin:6px 0;padding:8px 12px;border-radius:10px;font-size:.78rem;font-weight:600;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+@media (prefers-color-scheme:dark){.ab-nakit-ayni{background:#0c1a33;border-color:#1e3a8a;color:#bfdbfe}}
 .ab-banka-wrap:empty{display:none}
 .ab-banka-lbl{font-size:.68rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--text-3,#71717a);margin:10px 2px 6px}
 .ab-banka{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;text-align:left;border:1.5px solid #e4e4e8;background:#fff;border-radius:13px;padding:9px 12px;margin-bottom:6px;font-family:inherit;color:#18181b;cursor:pointer}
@@ -172,12 +175,19 @@
 @media (prefers-color-scheme:dark){.enyi-box{background:#1c1c20}.enyi-box p{color:#d4d4d8}.enyi-s{background:#2a2a30;color:#f4f4f5}.enyi-h{color:#fcd34d}}
 </style>
 <style id="v1169-dis-css">
-.ab-dis{margin:8px 0}.ab-dis-satir{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;margin-bottom:8px;border-radius:14px;background:#fff7ed;border:1px solid #fdba74;color:#7c2d12}
-.ab-dis-satir small{display:block;font:800 .68rem inherit;letter-spacing:.06em}.ab-dis-satir em{display:block;font-style:normal;font-size:.78rem;opacity:.8}.ab-dis-satir b{font-size:1.1rem}
-.ab-dis-satir button{border:0;background:transparent;font-size:1rem;color:#9a3412;cursor:pointer;min-width:36px;min-height:36px}
-.ab-dis-magaza{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;margin-bottom:8px;border-radius:14px;background:#ecfdf5;border:1px solid #86efac;color:#14532d}.ab-dis-magaza small{font:800 .68rem inherit;letter-spacing:.06em}.ab-dis-magaza b{font-size:1.1rem}
-.ab-dis-ekle{width:100%;min-height:44px;border:1.5px dashed #a1a1aa;border-radius:14px;background:transparent;font:700 .9rem inherit;color:#52525b;cursor:pointer}.ab-dis-not{font-size:.82rem;opacity:.8;padding:6px 2px}
-@media (prefers-color-scheme:dark){.ab-dis-satir{background:#2a1a0e;border-color:#9a3412;color:#fed7aa}.ab-dis-magaza{background:#0f2a1c;border-color:#166534;color:#bbf7d0}}
+.ab-dis{margin:4px 0}
+/* V11.73: dış ödeme — minimal (satışların ~%25'i; küçük kutu + küçük bağlantılar) */
+.ab-dis-kutu{padding:8px 12px;margin-bottom:6px;border-radius:12px;background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12}
+.ab-dis-bas{font:800 .6rem inherit;letter-spacing:.1em;text-transform:uppercase;opacity:.65;margin-bottom:2px}
+.ab-dis-satir{display:flex;align-items:center;gap:8px;min-height:30px;font-size:.86rem}
+.ab-dis-ad{font-weight:800;letter-spacing:.02em}.ab-dis-urun{font-size:.72rem;opacity:.65;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+.ab-dis-satir b{margin-left:auto;font-size:.95rem;font-variant-numeric:tabular-nums}
+.ab-dis-satir button{border:0;background:transparent;color:#9a3412;font-size:.9rem;min-width:30px;min-height:30px;cursor:pointer}
+.ab-dis-magaza{display:flex;justify-content:space-between;align-items:center;margin-top:4px;padding-top:6px;border-top:1px dashed #fdba74;font-size:.86rem;font-weight:700}.ab-dis-magaza b{font-size:1rem;font-variant-numeric:tabular-nums}
+.ab-dis-alt{display:flex;gap:14px;justify-content:flex-end}
+.ab-dis-alt button{border:0;background:transparent;padding:4px 2px;font:600 .72rem inherit;color:#71717a;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.ab-dis-not{font-size:.84rem;font-weight:600;color:#14532d;background:#ecfdf5;border:1px solid #bbf7d0;border-radius:12px;padding:10px 12px;margin:6px 0}
+@media (prefers-color-scheme:dark){.ab-dis-kutu{background:#2a1a0e;border-color:#7c2d12;color:#fed7aa}.ab-dis-satir button{color:#fdba74}.ab-dis-magaza{border-color:#7c2d12}.ab-dis-alt button{color:#a1a1aa}.ab-dis-not{background:#0f2a1c;border-color:#166534;color:#bbf7d0}}
 </style>
 </head>
 <body>
@@ -1199,9 +1209,9 @@
   </div>
 </div>
 
-<script type="module" src="app.js?v=V11.72-20261112-0344"></script>
-<script type="module" src="sevkiyat.js?v=V11.72-20261112-0344"></script>
-<script type="module" src="gonderim.js?v=V11.72-20261112-0344"></script>
+<script type="module" src="app.js?v=V11.74-20261112-1451"></script>
+<script type="module" src="sevkiyat.js?v=V11.74-20261112-1451"></script>
+<script type="module" src="gonderim.js?v=V11.74-20261112-1451"></script>
 
 <!-- ═══════ MYSTATS MODAL ═══════ -->
 <div id="mystats-modal" class="modal-overlay" style="display:none">
