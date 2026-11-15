@@ -60,12 +60,12 @@ import {
   eposta, yonetici, depoYetkili, seriYetkili, kodAnahtar, kodEs, kalemListe, kalemTamam, durumHesapla, teslimTuru, gecikmeGun, kalemTur, gruplar, grupTeslim, markaServisleri, tumServisAdlari, kalemMarka, servisAdlari, MARKA_SERVIS, kalemKilitli, kismiTeslim, hepsiTeslim, grupPartileri, TUR_AD, TUR_KISA,
   state, kancalar, seriState, seriYukle, seriDogrula, seriSahibi, kalemSerisiz, bilinenOgren, durumEtiket, normSeri, cikisDurumu, tekYenile,
   yukle, gecmisYukle, aralikYukle, guncelle, olustur as olusturKayit, kayitUret, yeniIsSayisi, yetimSatislar, seriKilitleriniEsitle, maskeKimlik, maskeEposta, saticiAdi, csvAyristir, iceAktarPlan, iceAktarYaz, telNorm, dec
-} from './sevkiyat-veri.js?v=V11.77-20261113-0108';
-import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.77-20261113-0108';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.77-20261113-0108';
-import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.77-20261113-0108';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.77-20261113-0108';
-import * as Talep from './sevkiyat-talep.js?v=V11.77-20261113-0108';
+} from './sevkiyat-veri.js?v=V11.91-20261116-0130';
+import { belgeAc, listeAc, waAc, waTeslimAc, servisMesaji, musteriMetni } from './sevkiyat-belge.js?v=V11.91-20261116-0130';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.91-20261116-0130';
+import { stilEkle, ic } from './sevkiyat-stil.js?v=V11.91-20261116-0130';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.91-20261116-0130';
+import * as Talep from './sevkiyat-talep.js?v=V11.91-20261116-0130';
 
 const $ = id => document.getElementById(id);
 const SAYIM_MS = 4 * 60 * 1000;
@@ -107,7 +107,7 @@ function formEnjekte() {
 function depoSatiri(x, duzenle, zorunlu, kam) {
   // V11.19: etiket yok; kutu seri kutusuyla hizalı, boşken gri “Depo seçiniz”
   const liste = DEPOLAR.slice(); if (x.depo && !liste.includes(x.depo)) liste.push(x.depo);   // tanımdan silinmiş eski depo görünür kalır
-  if (!duzenle) return '';
+  if (!duzenle || /^SIG-/i.test(String(x.kod || ''))) return '';   // V11.89: SC+ Sigorta hizmet kalemi depo istemez
   return '<div class="svk-kin svk-kdepo' + (zorunlu && !x.depo ? ' eksik' : '') + (x.depo ? '' : ' bos') + '"><select class="svk-in svk-depo" aria-label="Depo" data-n="' + x.n + '"><option value="">Depo seçiniz</option>' +
     liste.map(d => '<option' + (x.depo === d ? ' selected' : '') + '>' + esc(d) + '</option>').join('') + '</select>' + (kam ? '<span class="sp40"></span>' : '') + '<span class="dur sp"></span></div>';
 }
@@ -528,7 +528,7 @@ const kalemYesil = (s, x) => seriVar(x) || !!x.teslim || !!grupTeslim(s, kalemTu
 function ozetHtml(s, x, kodGoster) {
   const tt = kalemTur(s, x), tg = grupTeslim(s, tt), p = [];
   if (kodGoster && x.kod) p.push('<span>' + esc(x.kod) + '</span>');
-  p.push(x.depo ? '<span>' + esc(x.depo) + '</span>' : (s.kapali ? '' : '<span class="eksik">Depo seçilmedi</span>'));
+  p.push(x.depo ? '<span>' + esc(x.depo) + '</span>' : ((s.kapali || /^SIG-/i.test(String(x.kod || ''))) ? '' : '<span class="eksik">Depo seçilmedi</span>'));
   p.push(tt === 'musteri' ? '<span class="m">' + ic('user', 12) + 'Müşteri alır' + (tg ? ' ✓' : '') + '</span>'
     : '<span class="s">' + ic('truck', 12) + 'Servise' + (x.servis ? ' · ' + esc(x.servis) : '') + (tg ? ' ✓' : '') + '</span>');
   return '<span class="svk-oz">' + p.filter(Boolean).join('<i>·</i>') + '</span>';
@@ -695,6 +695,12 @@ function panel(no, baslik, durum, durumEt, icerik) {
 const pesinAd = x => x === 'Teslimde' ? 'Teslimde nakit' : 'Peşin (' + (x || 'Nakit') + ')';
 function odemeSatirlari(f) {
   const o = f.odeme || {}, L = [];
+  const th = (Array.isArray(o.tahsilatlar) ? o.tahsilatlar : []).filter(r => r && Number(r.tutar) > 0);
+  if (th.length) {   // V11.88: tahsilat satırları tek tek; kalan kart / kredi satırı ayrıca
+    th.forEach(r => L.push([(r.tip === 'Teslimde' ? 'Teslimde nakit' : r.tip === 'EFT' ? 'EFT' + (r.banka && r.banka.ad ? ' · ' + r.banka.ad : '') : 'Nakit') + (r.gerekce ? ' · ' + r.gerekce : ''), tl(r.tutar)]));
+    if (o.tip !== 'nakit') L.push([(o.kart || 'Kart') + (o.taksit > 1 ? ' · ' + o.taksit + ' taksit (' + o.taksit + ' × ' + tl(o.aylik) + ')' : ' · tek çekim'), tl(o.kartTutar || Math.max(0, (Number(o.toplam) || 0) - th.reduce((a, r) => a + Number(r.tutar), 0)))]);
+    return L;
+  }
   if (o.pesin > 0) L.push([pesinAd(o.pesinSekli), tl(o.pesin)]);
   if (o.tip === 'nakit') { if (!(o.pesin > 0)) L.push([o.sekil === 'EFT' ? 'EFT' : 'Nakit', tl(o.toplam)]); else L.push(['Kalan (' + (o.sekil === 'EFT' ? 'EFT' : 'Nakit') + ')', tl(Math.max(0, (Number(o.toplam) || 0) - o.pesin))]); }
   else if (o.tip === 'proje') L.push([o.kart || 'Kartlı ödeme', tl(o.toplam)]);
@@ -708,11 +714,12 @@ function fiyatKartHtml(s) {
   const kal = (f.kalemler || []).map(k => '<div class="svk-fr"><span>' + esc(k.urun) + (k.kampanya ? '<small>🏷 ' + esc(k.kampanya) + '</small>' : '') + '</span><b>' +
     (k.indirim > 0 ? '<s>' + tl(k.liste) + '</s> ' : '') + tl(k.net) + '</b></div>').join('');
   const ind = (f.altIndirim > 0 ? sat('Ek indirim', '−' + tl(f.altIndirim)) : '') +
-    (f.pazarlik > 0 ? sat('Pazarlık indirimi' + (f.pazarlikNotu ? ' <small>' + esc(f.pazarlikNotu) + '</small>' : ''), '−' + tl(f.pazarlik)) : '');
+    (f.pazarlik > 0 ? sat('Pazarlık indirimi' + (f.pazarlikNotu ? ' <small>' + esc(f.pazarlikNotu) + '</small>' : ''), '−' + tl(f.pazarlik)) : '') +
+    (f.pazarlik < 0 ? sat('Anlaşılan tutar artışı' + (f.pazarlikNotu ? ' <small>' + esc(f.pazarlikNotu) + '</small>' : ''), '+' + tl(-f.pazarlik)) : '');   // V11.81: yalnız personel kartında
   const o = f.odeme || {}, disVar = Array.isArray(f.dis) && f.dis.length > 0;   // V11.69
   return '<div class="svk-card"><div class="svk-ch">' + ic('wallet', 16) + ' Satış / fiyat<span class="sg">' + esc(tl((Number(o.toplam) || 0) + (disVar ? Number(f.disToplam) || 0 : 0))) + '</span></div><div class="svk-cb">' +
     kal + ind + sat('Net nakit değeri', tl(f.netNakit), 'ara') + (f.urunIndirim > 0 ? '<div class="svk-not" style="margin:4px 0 0">Satır fiyatlarına yansıyan ürün indirimi: ' + tl(f.urunIndirim) + '</div>' : '') +
-    (disVar ? '<div class="svk-fh">Firmaya ödenecek (mahsup kaydı)</div>' + f.dis.map(d => sat(esc(d.ad) + (d.magazaCeker ? '<small>mağaza kartı çeker · firmaya aktarılacak</small>' : ''), tl(d.tutar))).join('') : '') +
+    (disVar ? '<div class="svk-fh">3P Tahsilat (mahsup kaydı)</div>' + f.dis.map(d => sat(esc(d.ad) + (d.magazaCeker ? '<small>mağaza kartı çeker · firmaya aktarılacak</small>' : ''), tl(d.tutar))).join('') : '') +
     (disVar ? '<div class="svk-fh">Mağazaya ödenecek</div>' : '<div class="svk-fh">Ödeme</div>') + (disVar && !(Number(o.toplam) > 0) ? sat('Mağazaya ödenecek tutar yok', tl(0)) : odemeSatirlari(f).map(x => sat(esc(x[0]), x[1])).join('')) +
     sat(disVar ? 'Müşterinin toplam ödeyeceği (firma + mağaza)' : 'Müşterinin ödeyeceği toplam', tl((Number(o.toplam) || 0) + (disVar ? Number(f.disToplam) || 0 : 0)), 'top') +
     (f.vadeFarki > 0 && yonetici() ? '<div class="svk-not" style="margin-top:6px">Vade farkı / komisyon: <b>' + tl(f.vadeFarki) + '</b> (yalnızca yönetici görür; müşteri belgelerinde yer almaz)</div>' : '') +
@@ -813,9 +820,7 @@ function detayHtml(s) {
           (kgir(x) && !dz && yonetici() ? ' <button class="svk-btn kucuk" data-act="serisizyap" data-n="' + x.n + '">Seri gerekmez yap</button>' : '') + '</span></div>' : '');
     const rozetler = (x.ek ? '<div class="svk-ipucu nt">' + ic('info', 14) + '<span>Sonradan eklendi · ' + kim(x.ek.u) + ' · ' + zamanTR(x.ek.t) + '</span></div>' : '') +
       (x.degisti ? '<div class="svk-ipucu nt">' + ic('info', 14) + '<span>Ürün değiştirildi: <b>' + esc(x.degisti.eski && x.degisti.eski.urun) + '</b> → bu ürün · ' + kim(x.degisti.u) + ' · ' + zamanTR(x.degisti.t) + (x.degisti.neden ? ' · ' + esc(x.degisti.neden) : '') + '</span></div>' : '');
-    const aksiyon = kgir(x) && !dz
-      ? '<div class="svk-kaks"><button class="svk-btn kucuk" data-act="kalemdeg" data-n="' + x.n + '">' + ic('refresh', 13) + ' Ürünü değiştir</button>' +
-        (k.length > 1 && depoYetkili() ? '<button class="svk-btn kucuk" data-act="kalemcikar" data-n="' + x.n + '">' + ic('trash', 13) + ' Satırı çıkar</button>' : '') + '</div>' : '';
+    const aksiyon = '';   // V11.84: “Ürünü değiştir / Satırı çıkar” kalktı → tek “Ürün güncelle” (Teklif Taslağı)
     return '<div class="svk-kalem"><div class="svk-kad"><span class="no">' + (x.n + 1) + '</span><span class="nm">' + esc(x.urun) + '</span></div>' +
       '<div class="svk-ozr">' + ozetHtml(s, x, true) + '</div>' + turSatiri(x) + depoSatiri(x, pln && (dz || yonMod(s) || !kalemKilitli(s, x)), s.depoZorunlu, kgir(x) && gerek && !dz && kameraVar) +
       '<div class="svk-kin"><input class="svk-in svk-seri" data-n="' + x.n + '" placeholder="' + (gerek || dz ? 'Seri / barkod' : 'Seri gerekmez') + '" enterkeyhint="next" autocomplete="off" autocapitalize="characters" spellcheck="false" value="' + esc(x.seriNo || '') + '"' + (kgir(x) && (gerek || dz) ? '' : ' disabled') + '>' +
@@ -824,7 +829,9 @@ function detayHtml(s) {
   }).join('');
   const taraBtn = (kameraVar && !dz && k.some(x => kgir(x) && !kalemTamam(x)))
     ? '<button class="svk-btn ana tam" style="margin-top:12px" data-act="tara">' + ic('camera', 16) + ' Kamera ile seri tara</button>' : '';
-  const ekleBtn = girilebilir ? '<button class="svk-btn tam" style="margin-top:10px" data-act="kalemekle">' + ic('box', 15) + ' Ürün ekle</button>' : '';
+  const guncelBtn = girilebilir && !s.iptal && !s.iade && !s.silindi && !s.kapali && (yonetici() || depoYetkili() || seriYetkili(s))
+    ? '<button class="svk-btn tam" style="margin-top:10px" data-act="satisrevize">🛒 Ürün güncelle</button><div class="svk-ipucu nt" style="margin-top:6px">' + ic('info', 14) + '<span>Satış, müşteri bilgisiyle <b>Teklif Taslağı</b>na alınır; ürünü orada değiştirir / çıkarır, ödemeyi seçip satış belgesini güncellersiniz. Fiyat değişimi ve seri girilmiş ürünler yalnız yönetici.</span></div>' : '';
+  const ekleBtn = guncelBtn + (girilebilir ? '<button class="svk-btn tam" style="margin-top:10px" data-act="kalemekle">' + ic('box', 15) + ' Ürün ekle</button>' : '');
 
   // — Teslimat bilgileri
     const servisSecim = (G.includes('servis') && s.atananServis) ? '<div style="font-weight:700">' + esc(s.atananServis) + '</div>' : '';   // V11.14: servis atama kalktı; eski kayıttaki ad salt okunur
@@ -1212,7 +1219,8 @@ async function tikla(e) {
   if (act === 'watesl') return waTeslimAc(s);
   if (act === 'imzatemizle') { taslakSifirla(null, el.dataset.g); return yenidenCiz(); }
   if (act === 'kopyala') return musteriKopyala(s);   // V11.37: herkes basabilir; yönetici dışı için 1 kez sınırı musteriKopyala içinde
-  if (!depoYetkili() && !(seriYetkili(s) && ['tara', 'kalemekle', 'kalemdeg', 'teslim', 'cikisdogrula', 'kalemtur', 'kalemsrv'].includes(act))) return;   // V11.32/37: satış personeli yalnız KENDİ satışında seri okut / ürün ekle / değiştir / teslim / çıkış doğrula / teslim şekli; başkasının satışı salt okunur
+  if (act === 'satisrevize') return satisRevizeBaslat(s);   // V11.84: “Ürün güncelle” — satış Teklif Taslağı'na
+  if (!depoYetkili() && !(seriYetkili(s) && ['tara', 'kalemekle', 'kalemdeg', 'kalemcikar', 'teslim', 'cikisdogrula', 'kalemtur', 'kalemsrv'].includes(act))) return;   // V11.32/37: satış personeli yalnız KENDİ satışında seri okut / ürün ekle / değiştir / teslim / çıkış doğrula / teslim şekli; başkasının satışı salt okunur
   if (act === 'tara') return taraBaslat();
 
   if (act === 'kalemtur') {
@@ -1379,9 +1387,77 @@ function urunSec(baslik, ozet, tamamEt) {
   }
   return pr;
 }
+// V11.82: ürün değişimi / çıkarma / ekleme kuralı — FİYATI değiştiren işlem ya da SERİSİ girilmiş ürün yalnız yönetici; basit durumda (fiyat aynı, seri yok) yetkili herkes.
+const seriDolu = k => !!(k && k.seriNo && String(k.seriNo).trim());
+const nakitFiyat = kod => { const p = (B() && B().urunBul && B().urunBul(kod)) || null; if (!p) return null; const v = parseFloat(String(p['Nakit'] ?? p.nakit ?? '').replace(',', '.')); return isNaN(v) ? null : v; };
+const fiyatSatiri = (s, n) => (s.fiyat && Array.isArray(s.fiyat.kalemler) && s.fiyat.kalemler[Number(n)]) || null;
+function degisimFiyatli(s, n, yeniKod) {   // eski kayıt (fiyat bloğu yok) → fiyat tutulmadığı için basit sayılır
+  const f = fiyatSatiri(s, n); if (!s.fiyat || !f) return false;
+  const yeni = nakitFiyat(yeniKod); if (yeni === null) return true;   // fiyatı bilinmeyen ürün → yönetici
+  return Math.abs(yeni - (Number(f.liste) || 0)) > 0.5 || Number(f.indirim) > 0 || !!f.dis || !!String(f.kampanya || '').trim();
+}
+const cikarFiyatli = (s, n) => { const f = fiyatSatiri(s, n); return !!(s.fiyat && f && (Number(f.net) > 0 || f.dis)); };
+const eklemeFiyatli = (s, kod) => { if (!s.fiyat) return false; const y = nakitFiyat(kod); return y === null || y > 0; };
+const SERI_YONETICI = 'Bu ürüne seri girilmiş; ürünü yalnız yönetici değiştirebilir veya çıkarabilir.';
+const FIYAT_YONETICI = 'Bu işlem satış fiyatını değiştirir; fiyat değişimi yalnız yönetici tarafından (satış yeniden hesaplanarak) yapılabilir. Yöneticiye bildirin.';
+const FIYAT_NOT = ' · ⚠ satış fiyatı bu işlemle güncellenmedi';
+// V11.83/84: SATIŞ REVİZE (“Ürün güncelle”) — satış müşteri bilgisiyle Teklif Taslağı'na alınır, ürün/fiyat orada düzenlenir; AYNI satış no güncellenir.
+// Eşleme: yeni sepet satırı, aynı ürün koduna sahip henüz eşleşmemiş eski satırı DEVRALIR (seri, depo, teslim korunur);
+// eşleşmeyen yeni satır "sonradan eklendi", eşleşmeyen eski satır "çıkarıldı" olur. Teslim edilmiş satır çıkarılamaz.
+// fiyat.kalemler[] sevkiyat satır numarasına (n) hizalanır; çıkarılan satır net 0 ile yer tutar.
+function satisRevizePlan(sunucu, yeni, simdi, kim, yon) {
+  if (sunucu.iptal || sunucu.iade || sunucu.silindi) return { hata: 'İptal / iade / silinmiş satış güncellenemez.', tur: 'kapali' };
+  if (sunucu.kapali) return { hata: 'Sevkiyat kapanmış (tamamlanmış). Önce “Teslimi geri al” ile açın.', tur: 'kapali' };
+  const eski = sunucu.kalemler || {};
+  const aktif = Object.keys(eski).map(Number).sort((a, b) => a - b).filter(n => !eski[n].cikarildi);
+  const kullanildi = new Set();
+  const esle = (yeni.urunler || []).map(u => {
+    const n = aktif.find(k => !kullanildi.has(k) && String(eski[k].kod) === String(u.kod));
+    if (n !== undefined) kullanildi.add(n);
+    return n === undefined ? -1 : n;
+  });
+  const cikar = aktif.filter(k => !kullanildi.has(k));
+  for (const k of cikar) if (kalemKilitli(sunucu, eski[k])) return { hata: '“' + eski[k].urun + '” teslim edilmiş; satıştan çıkarılamaz / değiştirilemez.', tur: 'kilitli' };
+  if (!yon && cikar.some(k => seriDolu(eski[k]))) return { hata: SERI_YONETICI, tur: 'kilitli' };   // seri girilmiş ürünü yalnız yönetici değiştirir/çıkarır
+  const yaz = {}, seriSil = [], hizali = [];
+  let son = Math.max(-1, ...Object.keys(eski).map(Number));
+  const vars = teslimTuru(sunucu), tsl = grupTeslim(sunucu, vars) ? (vars === 'musteri' ? 'servis' : 'musteri') : vars;
+  (yeni.urunler || []).forEach((u, i) => {
+    let n = esle[i];
+    if (n === -1) {
+      n = ++son;
+      yaz['kalemler.' + n] = { urun: u.urun, kod: u.kod, seriNo: '', seriGerekliDegil: false, teslimSekli: tsl, ...markaGam(u.kod), ek: { t: simdi, u: kim, neden: 'Satış revize' } };
+    } else yaz['kalemler.' + n + '.urun'] = u.urun;
+    hizali[n] = ((yeni.fiyat && yeni.fiyat.kalemler) || [])[i] || null;
+  });
+  cikar.forEach(k => {
+    yaz['kalemler.' + k + '.cikarildi'] = { t: simdi, u: kim, neden: 'Satış revize' };
+    if (seriDolu(eski[k])) { seriSil.push(normSeri(eski[k].seriNo)); yaz['kalemler.' + k + '.seriNo'] = ''; }
+  });
+  for (let n = 0; n <= son; n++) if (!hizali[n]) hizali[n] = { urun: (eski[n] && eski[n].urun) || '', net: 0, liste: 0, indirim: 0, kampanya: '', cikarildi: true };
+  yaz.fiyat = { ...yeni.fiyat, kalemler: hizali };
+  yaz.odemeYontemi = yeni.method || sunucu.odemeYontemi || '';
+  yaz.fiyatRev = yeni.rev;
+  yaz.fiyatGecmis = [...(sunucu.fiyatGecmis || []), { t: simdi, u: kim, eski: yeni.eskiToplam, yeni: yeni.yeniToplam }].slice(-20);
+  return { yaz, seriSil, ozet: { eklenen: esle.filter(n => n === -1).length, cikan: cikar.length } };
+}
+async function satisRevizeUygula(saleNo, yeni) {
+  const s = state.list.get(saleNo); if (!s) return false;
+  const yon = yonetici();
+  return guncelle(s, sunucu => satisRevizePlan(sunucu, yeni, Date.now(), eposta(), yon), 'satis_revize',
+    'Satış revize: ' + tl(yeni.eskiToplam) + ' → ' + tl(yeni.yeniToplam));
+}
+async function satisRevizeBaslat(s) {
+  if (!B().satisRevizeSepet) return;
+  if (!(yonetici() || depoYetkili() || seriYetkili(s))) return;
+  if (s.iptal || s.iade || s.silindi || s.kapali) return hataTekrar('İptal / iade / tamamlanmış sevkiyatta ürün güncellenemez. Tamamlanmışsa önce “Teslimi geri al”.', 'kapali');
+  await B().satisRevizeSepet(s.saleNo);
+}
 async function kalemEkle(s) {
   const v = await urunSec('Ek ürün ekle', 'Bu sevkiyata yeni bir ürün satırı eklenir; seri numarası sonradan girilir. Satış belgesi değişmez, değişiklik hareket geçmişine yazılır.', 'Ürünü ekle');
   if (!v) return;
+  const fy = eklemeFiyatli(s, v.kod);
+  if (fy && !yonetici()) return hataTekrar(FIYAT_YONETICI, 'kilitli');   // V11.82
   const ok = await guncelle(s, sunucu => {
     if (sunucu.kapali) return { hata: 'Sevkiyat kapanmış.', tur: 'kapali' };
     if (hepsiTeslim(sunucu)) return { hata: 'Tüm ürünleri teslim edilmiş sevkiyata ürün eklenemez.', tur: 'kilitli' };
@@ -1390,20 +1466,24 @@ async function kalemEkle(s) {
     const vars = teslimTuru(sunucu), tsl = grupTeslim(sunucu, vars) ? (vars === 'musteri' ? 'servis' : 'musteri') : vars;
     return { yaz: { ['kalemler.' + n]: { urun: v.urun, kod: v.kod, seriNo: '', seriGerekliDegil: false, teslimSekli: tsl, ...markaGam(v.kod), ek: { t: Date.now(), u: eposta(), neden: String(v.neden || '').trim() } } } };
   }, 'kalem_eklendi', v.urun + ' (' + v.kod + ')' + (v.neden ? ' — ' + v.neden : ''));
-  if (ok) toast('Ürün eklendi: <b>' + esc(v.urun) + '</b>', []);
+  if (ok) toast('Ürün eklendi: <b>' + esc(v.urun) + '</b>' + (fy ? FIYAT_NOT : ''), []);
   yenidenCiz();
 }
 async function kalemDegistir(s, n) {
   const k = (s.kalemler || {})[n]; if (!k) return;
   const dolu = !!(k.seriNo && String(k.seriNo).trim());
+  if (dolu && !yonetici()) return hataTekrar(SERI_YONETICI, 'kilitli');   // V11.82
   const v = await urunSec('Ürünü değiştir', (n * 1 + 1) + '. satır: ' + k.urun + ' (' + k.kod + ').' + (dolu ? ' Girilmiş seri (' + k.seriNo + ') silinir ve serbest bırakılır.' : '') + ' Yeni ürünün seri numarası sonradan girilir.', 'Ürünü değiştir');
   if (!v) return;
   if (String(v.kod) === String(k.kod)) return hataTekrar('Aynı ürün seçildi; değişiklik yapılmadı.', 'eksik');
+  const fy = degisimFiyatli(s, n, v.kod);
+  if (fy && !yonetici()) return hataTekrar(FIYAT_YONETICI, 'kilitli');   // V11.82
   const ok = await guncelle(s, sunucu => {
     if (sunucu.kapali) return { hata: 'Sevkiyat kapanmış.', tur: 'kapali' };
     const e = (sunucu.kalemler || {})[n];
     if (!e || e.cikarildi) return { hata: 'Satır bulunamadı (başka bir cihazda çıkarılmış olabilir).', tur: 'eksik' };
     if (kalemKilitli(sunucu, e)) return { hata: 'Teslim edilmiş ürün değiştirilemez.', tur: 'kilitli' };
+    if (!yonetici() && seriDolu(e)) return { hata: SERI_YONETICI, tur: 'kilitli' };   // başka cihazda seri girilmiş olabilir
     const eskiSeri = e.seriNo && String(e.seriNo).trim() ? normSeri(e.seriNo) : '';
     return {
       yaz: { ['kalemler.' + n + '.urun']: v.urun, ['kalemler.' + n + '.kod']: v.kod, ['kalemler.' + n + '.seriNo']: '', ['kalemler.' + n + '.seriGerekliDegil']: false, ['kalemler.' + n + '.servis']: '', ['kalemler.' + n + '.marka']: markaGam(v.kod).marka, ['kalemler.' + n + '.gam']: markaGam(v.kod).gam,
@@ -1411,12 +1491,15 @@ async function kalemDegistir(s, n) {
       seriSil: eskiSeri ? [eskiSeri] : []
     };
   }, 'kalem_degisti', (n * 1 + 1) + '. satır: ' + k.urun + ' → ' + v.urun + (v.neden ? ' — ' + v.neden : ''));
-  if (ok) toast('Ürün değiştirildi: <b>' + esc(v.urun) + '</b>', []);
+  if (ok) toast('Ürün değiştirildi: <b>' + esc(v.urun) + '</b>' + (fy ? FIYAT_NOT : ''), []);
   yenidenCiz();
 }
 async function kalemCikar(s, n) {
   const k = (s.kalemler || {})[n]; if (!k) return;
   if (kalemListe(s).length < 2) return hataTekrar('Sevkiyatta en az bir ürün satırı kalmalı. Tüm sevkiyat için “iptal”i kullanın.', 'eksik');
+  if (!yonetici() && seriDolu(k)) return hataTekrar(SERI_YONETICI, 'kilitli');   // V11.82
+  const fy = cikarFiyatli(s, n);
+  if (fy && !yonetici()) return hataTekrar(FIYAT_YONETICI, 'kilitli');
   const v = await diyalog({ ikon: 'trash', kat: 'Onay', baslik: 'Ürün satırı çıkarılsın mı?', tamam: 'Satırı çıkar', vazgec: 'Vazgeç', tehlike: true,
     ozet: (n * 1 + 1) + '. satır: ' + k.urun + ' (' + k.kod + ')' + (k.seriNo ? ' — girilmiş seri ' + k.seriNo + ' serbest bırakılır.' : '.'),
     govde: '<label class="svk-lbl">Neden</label><input class="svk-in" data-f="neden" placeholder="İsteğe bağlı" autocomplete="off">' });
@@ -1427,6 +1510,7 @@ async function kalemCikar(s, n) {
     const e = (sunucu.kalemler || {})[n];
     if (!e || e.cikarildi) return { hata: 'Satır zaten çıkarılmış.', tur: 'eksik' };
     if (kalemKilitli(sunucu, e)) return { hata: 'Teslim edilmiş üründe satır çıkarılamaz.', tur: 'kilitli' };
+    if (!yonetici() && seriDolu(e)) return { hata: SERI_YONETICI, tur: 'kilitli' };
     if (aktifSay < 2) return { hata: 'Sevkiyatta en az bir ürün satırı kalmalı.', tur: 'eksik' };
     const eskiSeri = e.seriNo && String(e.seriNo).trim() ? normSeri(e.seriNo) : '';
     const yaz = { ['kalemler.' + n + '.cikarildi']: { t: Date.now(), u: eposta(), neden: String(v.neden || '').trim() }, ['kalemler.' + n + '.seriNo']: '' };
@@ -1435,6 +1519,7 @@ async function kalemCikar(s, n) {
     if (!sunucu.servisTeslim && hepsiTeslim(sim)) { const son = [...Object.values(sunucu.teslimler || {}), ...Object.values(sunucu.kalemler || {}).map(z => z && z.teslim)].filter(Boolean).sort((a, b) => b.t - a.t)[0]; if (son) yaz.servisTeslim = son; }
     return { yaz, seriSil: eskiSeri ? [eskiSeri] : [] };
   }, 'kalem_cikarildi', (n * 1 + 1) + '. satır: ' + k.urun + (v.neden ? ' — ' + v.neden : ''));
+  if (fy) toast('Satır çıkarıldı' + FIYAT_NOT, []);
   yenidenCiz();
 }
 
@@ -1785,7 +1870,8 @@ function sorguCiz() {
     if (!noAra) return '';
     const f = x.fiyat && x.fiyat.odeme, bk = f && f.banka;
     let od = ''; if (f) od = f.tip === 'nakit' ? (f.sekil === 'EFT' ? 'EFT' : 'Nakit') : ((f.kart || f.etiket || 'Kart') + (f.taksit > 1 ? ' · ' + f.taksit + ' taksit' : '')); else od = String(x.method || '');
-    if (f && f.pesin > 0) od += ' (peşin ' + (f.pesinSekli || 'Nakit') + ')';
+    if (f && Array.isArray(f.tahsilatlar) && f.tahsilatlar.length > 1) od = f.tip === 'nakit' ? [...new Set(f.tahsilatlar.map(r => r.tip === 'Teslimde' ? 'Teslimde' : r.tip))].join(' + ') : od + ' (+ ' + [...new Set(f.tahsilatlar.map(r => r.tip))].join(' + ') + ')';
+    else if (f && f.pesin > 0) od += ' (peşin ' + (f.pesinSekli || 'Nakit') + ')';
     const sat = saticiAdi(x) || String(x.userAd || '').trim() || kisa(x.user);
     const p = [['Satış No', svkNo({ satisNo: x.satisNo, saleNo: x.saleNo || x._id })], ['Mağaza', x.satisNoktasi || '—'], ['Satıcı', sat || '—'], ['Ödeme', od || '—']].concat(bk && bk.ad ? [['EFT hesabı', bk.ad + (bk.iban ? ' · ' + String(bk.iban).replace(/(.{4})/g, '$1 ').trim() : '')]] : []);
     return '<div class="svk-not" style="margin:8px 0 4px;padding:8px 10px;background:#f4f4f6;border-radius:10px;font-size:.78rem;line-height:1.6">' + p.map(a => '<b>' + a[0] + ':</b> ' + esc(a[1])).join(' &nbsp;·&nbsp; ') + '</div>';
@@ -2040,4 +2126,4 @@ async function detayAc(id) {
   return true;
 }
 window.Magaza = Magaza; window.Talep = Talep;
-window.Sevkiyat = { kayitHazirla: (sale, v, not) => kayitUret(sale, v, not), noktalar: () => SATIS_NOKTALARI.slice(), olusturSessiz: (sale, v, not) => olusturKayit(sale, v, not).kayit, uyariKarti: o => { stilEkle(); return diyalog({ ikon: 'alert', ...o }); }, detayAc, ac, kapat, geri, derinlik, formOku, olustur, belgeAc, durumHesapla, seriYukle, seriDogrula };
+window.Sevkiyat = { satisRevize: satisRevizeUygula, kayitHazirla: (sale, v, not) => kayitUret(sale, v, not), noktalar: () => SATIS_NOKTALARI.slice(), olusturSessiz: (sale, v, not) => olusturKayit(sale, v, not).kayit, uyariKarti: o => { stilEkle(); return diyalog({ ikon: 'alert', ...o }); }, detayAc, ac, kapat, geri, derinlik, formOku, olustur, belgeAc, durumHesapla, seriYukle, seriDogrula };
