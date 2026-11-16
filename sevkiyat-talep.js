@@ -8,9 +8,9 @@
 //  Seri kilidi YOK (seri satılmıyor); yoldaki seri satış/sevkiyatta kullanılmaya çalışılırsa kurumsal uyarıyla engellenir (yoldaSeri).
 //  Resmi stok hareketi ana programda kalır; bu modül talep + hazırlık + teslim kanıtıdır. Süzgeç düzen içindir, güvenlik değildir.
 // ═══════════════════════════════════════════════════════════════
-import { B, esc, eposta, rol, yonetici, depoYetkili, DEPOLAR, normSeri, seriYukle, seriSahibi, seriDogrula, seriState, seriGerekir, kodEs, zamanTR, yoldaSeri } from './sevkiyat-veri.js?v=V11.91-20261116-0130';
-import { kameraTara } from './sevkiyat-kamera.js?v=V11.91-20261116-0130';
-import * as Magaza from './sevkiyat-magaza.js?v=V11.91-20261116-0130';
+import { B, esc, eposta, rol, yonetici, depoYetkili, DEPOLAR, normSeri, seriYukle, seriSahibi, seriDogrula, seriState, seriGerekir, kodEs, zamanTR, yoldaSeri } from './sevkiyat-veri.js?v=V11.93-20261116-0915';
+import { kameraTara } from './sevkiyat-kamera.js?v=V11.93-20261116-0915';
+import * as Magaza from './sevkiyat-magaza.js?v=V11.93-20261116-0915';
 
 const COL = 'talepler', TTL = 60 * 1000, YOLDA_TTL = 3 * 60 * 1000, SAYIM_MS = 2 * 60 * 1000;
 const $ = id => document.getElementById(id);
@@ -30,7 +30,8 @@ function yeniId() { return 'T' + String(9e12 - Date.now()).padStart(13, '0') + M
 function sorgu(lim) {
   const b = B(), c = b.collection(b.db, COL), m = Magaza.secili(), k = Magaza.kapsam();
   lim = lim || 100;
-  if (yonetici()) return b.query(c, b.limit(lim));
+  if (yonetici() || state.tum) return b.query(c, b.limit(lim));   // V11.93: depo/mağaza kullanıcısı 'Tüm talepler'i açabilir
+  if (k && !m) return b.query(c, b.limit(lim));   // V11.93: depo/mağaza seçilmemişse boş liste yerine hepsi
   if (k === 'depo' && m) return b.query(c, b.where('depo', '==', m), b.limit(lim));
   if (k === 'magaza' && m) return b.query(c, b.where('magaza', '==', m), b.limit(lim));
   if (!k) return b.query(c, b.limit(lim));   // V11.88: depo/mağaza rolü olmayan diğer kullanıcılar da talepleri görür
@@ -95,7 +96,8 @@ export function geri() { if (derinlik() >= 2) { state.ekran = 'liste'; state.aci
 // ── 1) Liste ──────────────────────────────────────────────────
 export async function ac() {
   state.ekran = 'liste'; state.acik = null; listeCiz(true);
-  try { await yukle(true); } catch (e) { console.warn(e); }
+  state.hata = '';
+  try { await yukle(true); } catch (e) { console.warn(e); state.hata = (e && e.code === 'permission-denied') ? 'Talepler okunamadı: Firestore izni yok (talepler koleksiyonu için okuma kuralı eklenmeli).' : 'Talepler okunamadı: ' + ((e && (e.code || e.message)) || 'bağlantı hatası'); }   // V11.92: sessizce boş liste gösterme
   if (derinlik() === 1) listeCiz(); sayim(true);
 }
 function listeCiz(yukleniyor) {
@@ -109,6 +111,7 @@ function listeCiz(yukleniyor) {
   goster(baslikHtml('Talepler', konum()) +
     '<div style="padding:12px 14px 4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">' +
     (olusturabilir() ? '<button class="svk-btn ana" data-a="yeni">＋ Yeni talep</button>' : '') +
+    (Magaza.kapsam() && Magaza.secili() ? '<button class="svk-chip' + (state.tum ? ' on' : '') + '" data-a="tum">' + (state.tum ? 'Tüm talepler' : 'Yalnız ' + esc(Magaza.secili())) + '</button>' : '') +
     '<button class="svk-chip' + (state.filtre === 'aktif' ? ' on' : '') + '" data-a="filtre" data-k="aktif">Aktif <i>' + aktif.length + '</i></button>' +
     '<button class="svk-chip' + (state.filtre === 'bitti' ? ' on' : '') + '" data-a="filtre" data-k="bitti">Tamamlanan</button>' +
     '<span style="margin-left:auto;display:flex;gap:6px">' + (yonetici() ? '<button class="svk-ib tl-ib' + (secMod ? ' on' : '') + '" data-a="secmod" aria-label="Seçerek sil" title="Seçerek sil">☑</button>' : '') +
@@ -116,7 +119,7 @@ function listeCiz(yukleniyor) {
     '<button class="svk-ib tl-ib" data-a="yenile" aria-label="Yenile">⟳</button></span></div>' +
     (secMod ? '<div class="tl-secbar"><b>' + state.secim.size + ' seçili</b><button class="svk-btn kucuk" data-a="tumsec">Tümünü seç</button><button class="svk-btn kucuk tehlike" data-a="toplusil"' + (state.secim.size ? '' : ' disabled') + '>🗑 Sil</button><button class="svk-btn kucuk" data-a="secmod">Vazgeç</button></div>' : '') +
     '<div class="svk-liste" style="overflow:auto;flex:1;padding-top:8px">' + (l.length ? l.map(kart).join('') :
-      '<div class="svk-bos">' + (yukleniyor ? 'Yükleniyor…' : (state.filtre === 'aktif' ? 'Aktif talep yok.' : 'Tamamlanan talep yok.')) + '</div>') + '</div>');
+      '<div class="svk-bos">' + (yukleniyor ? 'Yükleniyor…' : (state.hata ? '<span style="color:#b91c1c;font-weight:700">⚠️ ' + esc(state.hata) + '</span>' : (state.filtre === 'aktif' ? 'Aktif talep yok.' : 'Tamamlanan talep yok.'))) + '</div>') + '</div>');
 }
 
 // ── 2) Yeni talep (mağaza ister) ──────────────────────────────
@@ -276,6 +279,7 @@ async function tikla(e) {
   const a = el.dataset.a, i = Number(el.dataset.i), d = Number(el.dataset.d);
   if (a === 'kapat') return kapat();
   if (a === 'geri') return geri();
+  if (a === 'tum') { state.tum = !state.tum; state.ts = 0; yukle(true).then(() => listeCiz()).catch(() => listeCiz()); return; }
   if (a === 'filtre') { state.filtre = el.dataset.k; return listeCiz(); }
   if (a === 'yenile') { el.disabled = true; try { await yukle(true); } catch (er) { console.warn(er); } return listeCiz(); }
   if (a === 'ac') return detayAc(el.dataset.id);
@@ -414,7 +418,7 @@ async function sayim(zorla) {
     state.sonSayim = n; rozet(n);
   } catch (e) { console.warn('talep sayim:', e); }
 }
-function navEkle() {
+export function navEkle() {
   if ($('tab-btn-talep')) return;
   const ref = $('tab-btn-sevkiyat') || $('tab-btn-teklifler'); if (!ref) return;
   const btn = document.createElement('button');
