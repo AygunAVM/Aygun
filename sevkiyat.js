@@ -74,7 +74,7 @@ const LOG_AD = {
   olusturuldu: 'Kayıt açıldı', yetim_satistan_olusturuldu: 'Yetim satıştan açıldı', seri_girildi: 'Seri girildi', seri_silindi: 'Seri silindi',
   kilitlendi: 'Depo onayı verildi (eski)', kilit_acildi: 'Depo onayı geri alındı (eski)',
   servise_teslim: 'Teslim edildi', kalem_teslim_sekli: 'Ürünün teslim şekli değişti', kalem_servis: 'Götüren servis seçildi', teslim_edildi: 'Çıkış doğrulandı · tamamlandı', teslim_geri_alindi: 'Teslim geri alındı',
-  kalem_eklendi: 'Ürün eklendi', kalem_degisti: 'Ürün değiştirildi', kalem_cikarildi: 'Ürün satırı çıkarıldı', iade: 'İade / depoya döndü', not_degisti: 'Not güncellendi', iptal: 'İptal edildi', iptal_geri_alindi: 'İptal geri alındı',
+  kalem_eklendi: 'Ürün eklendi', kalem_degisti: 'Ürün değiştirildi', kalem_cikarildi: 'Ürün satırı çıkarıldı', iade: 'İade / depoya döndü', iade_geri_alindi: 'İade geri alındı', not_degisti: 'Not güncellendi', iptal: 'İptal edildi', iptal_geri_alindi: 'İptal geri alındı',
   silindi: 'Kayıt silindi', fatura_kesen_degisti: 'Fatura bilgisi değişti', tarih_duzeltildi: 'Yönetici: işlem tarihi düzeltildi', servis_atandi: 'Servis atandı', teslim_turu_degisti: 'Teslim şekli değişti', teslimat_degisti: 'Teslimat tarihi değişti',
   tahsilat_alindi: 'Tahsilat alındı', seri_iade: 'Seri iade edildi / stokta yeniden göründü', seri_gerekmez: 'Yönetici: seri gerekmez', depo_degisti: 'Ürün deposu değişti', toplu_depo: 'Yönetici: toplu depo değişimi', toplu_servis: 'Yönetici: toplu servis değişimi', musteri_kopyalandi: 'Müşteri bilgisi kopyalandı', toplu_ice_aktarma: 'Yönetici: toplu içe aktarma (CSV / Excel)', ice_guncellendi: 'Yönetici: içe aktarılmış kayıt güncellendi (fiyat / personel / tarih)', belge_no_degisti: 'Yönetici: Belge No değiştirildi', satici_nokta_degisti: 'Yönetici: satıcı / satış noktası değiştirildi', belge_gonderildi: 'Satış belgesi müşteriye WhatsApp ile gönderildi', musteri_duzeltildi: 'Müşteri bilgisi / onay düzeltildi'
 };
@@ -1007,7 +1007,7 @@ function detayHtml(s) {
   const silBtn = '<button class="svk-btn tehlike" data-act="sil">' + ic('trash', 15) + ' Kaydı sil</button>';
   const riskBtn = (yonetici() && silinebilir(s))
     ? (s.iptal ? '<button class="svk-btn" data-act="iptalgeri">' + ic('undo', 15) + ' İptali geri al</button>' + silBtn
-      : s.iade ? silBtn
+      : s.iade ? '<button class="svk-btn" data-act="iadegeri">' + ic('undo', 15) + ' İadeyi geri al (Tamamlanan\'a döndür)</button>' + silBtn
       : '<button class="svk-btn tehlike" data-act="iptal">' + ic('ban', 15) + ' Sevkiyatı iptal et</button>' + silBtn) : '';
   if (riskBtn || iadeYap) {
     risk = '<div class="svk-card svk-risk"><div class="svk-ch">' + ic('alert', 16) + ' Yönetici / iade işlemleri</div><div class="svk-cb svk-eylem">' +
@@ -1432,6 +1432,7 @@ async function tikla(e) {
   if (act === 'iade') return iadeEt(s);
   if (act === 'iptal') return iptalEt(s);
   if (act === 'iptalgeri') return iptalGeriAl(s);
+  if (act === 'iadegeri') return iadeGeriAl(s);
   if (act === 'sil') return kaydiSil(s);
 }
 
@@ -1687,6 +1688,19 @@ async function iptalGeriAl(s) {
     const ekle = kalemListe(sunucu).filter(k => k.seriNo && String(k.seriNo).trim()).map(k => ({ seri: normSeri(k.seriNo), n: k.n, kod: k.kod }));
     return { yaz: { iptal: false, iptalBilgi: null }, seriEkle: ekle };
   }, 'iptal_geri_alindi');
+  yenidenCiz();
+}
+// V12.8: yanlışlıkla / gereksiz yapılan iade yönetici tarafından geri alınır → kayıt eski “Tamamlanan” durumuna döner, seri kilitleri yeniden bağlanır
+async function iadeGeriAl(s) {
+  if (!yonetici()) return;
+  if (!(await onay('İade geri alınsın mı?', svkNo(s) + ' iadeden çıkar ve önceki durumuna (Tamamlanan / Teslim edilen) döner; seri numaraları bu sevkiyata yeniden bağlanır. Başka bir sevkiyatta kullanılmışsa işlem reddedilir.', 'İadeyi geri al'))) return;
+  const ok = await guncelle(s, sunucu => {
+    if (sunucu.silindi) return { hata: 'Silinmiş kayıt geri alınamaz.', tur: 'kapali' };
+    if (!sunucu.iade) return { hata: 'Sevkiyat iade durumunda değil.', tur: 'eksik' };
+    const ekle = kalemListe(sunucu).filter(k => k.seriNo && String(k.seriNo).trim()).map(k => ({ seri: normSeri(k.seriNo), n: k.n, kod: k.kod }));
+    return { yaz: { iade: null }, seriEkle: ekle };
+  }, 'iade_geri_alindi');
+  if (ok) toast('İade geri alındı: <b>' + esc(svkNo(s)) + '</b>', []);
   yenidenCiz();
 }
 const SIL_NEDENLERI = ['Hatalı / test kaydı', 'Mükerrer kayıt', 'Müşteri vazgeçti', 'Satış iptal edildi', 'Diğer'];
