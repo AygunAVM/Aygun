@@ -406,7 +406,14 @@ function kok() {
   ptrBagla(o);
   o.addEventListener('change', degisti);
   o.addEventListener('input', e => {
-    if (e.target.id === 'svk-ara') { state.ara = e.target.value; const l = o.querySelector('.svk-liste'); if (l) l.innerHTML = listeHtml(); numaraIpucu(); }
+    if (e.target.id === 'svk-ara') {
+      state.ara = e.target.value; const l = o.querySelector('.svk-liste'); if (l) l.innerHTML = listeHtml(); numaraIpucu();
+      // V12.8: arama için kapanmış kayıtları (son 30 gün) bir kez arka planda yükle, sonra listeyi tazele
+      if (state.ara.trim().length >= 3 && !state.aramaGecmis) {
+        state.aramaGecmis = true;
+        gecmisYukle(false, 30).then(() => { const l2 = kok().querySelector('.svk-liste'); if (l2 && state.ara.trim()) { l2.innerHTML = listeHtml(); numaraIpucu(); } }).catch(() => { state.aramaGecmis = false; });
+      }
+    }
     else if (e.target.id && e.target.id.indexOf('svk-alan-') === 0) taslak.g[e.target.id.slice(9)].alan = e.target.value;
   });
   // El terminali / okuyucu Enter'ı: değeri işle, sonra sıradaki boş satıra geç
@@ -551,10 +558,11 @@ function durumUygun(s) {
 const aramaNorm = v => String(v == null ? '' : v).replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
 function goruntulenen() {
   const q = aramaNorm(state.ara.trim());
-  const sirala = kapaliFiltre() ? (a, b) => (b.ts || 0) - (a.ts || 0)
+  const sirala = (kapaliFiltre() || q) ? (a, b) => (b.ts || 0) - (a.ts || 0)
     : (a, b) => (a.teslimTarihi + saatSira(a.teslimSaati)).localeCompare(b.teslimTarihi + saatSira(b.teslimSaati));
   return [...state.list.values()].map(s => ({ ...s, durum: durumHesapla(s) })).filter(s => {
     if (s.silindi) return false;
+    if (q) return kapsamUygun(s, q);   // V12.8: arama yazılınca durum/tür/tarih süzgeci yok sayılır → iade, iptal, teslim edilmiş dahil TÜM kayıtlarda aranır
     if (!durumUygun(s)) return false;
     if (!turUygun(s)) return false;
     if (kapaliFiltre() ? !kapPencere(s) : !tarihUygun(s)) return false;
@@ -640,6 +648,7 @@ function listeHtml() {
   const list = goruntulenen();
   if (!list.length) return '<div class="svk-bos">' + ic('box', 34) + 'Bu filtreyle eşleşen sevkiyat yok.</div>';
   const sayfaBtn = n => n > 0 ? '<button class="svk-btn tam" style="margin:10px 0" data-act="daha">Daha fazla göster (' + n + ' kayıt daha)</button>' : '';
+  if (state.ara.trim()) return '<div class="svk-bos" style="padding:6px 2px;text-align:left;font-size:.78rem">' + list.length + ' kayıt bulundu · tüm durumlarda arandı (açık, teslim, iade, iptal; kapanmış kayıtlar son 30 gün)</div>' + list.slice(0, state.sayfa).map(kartHtml).join('') + sayfaBtn(list.length - state.sayfa);
   if (kapaliFiltre()) return '<div class="svk-bos" style="padding:6px 2px;text-align:left;font-size:.78rem">' + list.length + ' kayıt · ' +
       (state.kapSure === 'aralik' ? 'seçilen tarih aralığı' : 'son ' + state.kapSure + ' gün') + (state.kapSure === 'aralik' ? '' : ' (daha eski kayıtlar için “Arşiv: tarih aralığı”)') + '</div>' +
     list.slice(0, state.sayfa).map(kartHtml).join('') + sayfaBtn(list.length - state.sayfa);
