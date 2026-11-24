@@ -13071,6 +13071,7 @@ window.openAdmin = async function() {
   modal.style.zIndex = "9999";
   modal.style.display = 'flex';
   modal.classList.add('open');
+  try { if (window.PrimAdmin && window.PrimAdmin.arkaPlan) window.PrimAdmin.arkaPlan(); } catch (_e) { /* V12.8: prim sigortası günde bir kez arka planda */ }
 
   // ✅ DÜZELTME — 5 sekme mobil CSS enjeksiyonu (bir kez eklenir)
   if (!document.getElementById('_admin-5tab-css')) {

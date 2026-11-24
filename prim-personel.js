@@ -102,6 +102,7 @@ export function cssEkle() {
 :root[data-theme="dark"] #prim-kocluk .pk-oneri{background:#0a3b25;border-color:#166534;color:#bbf7d0}
 /* vitrin rozeti */
 .pm-rozet{display:inline-block;margin:2px 0 0 4px;padding:1px 8px;border-radius:99px;font-size:.58rem;font-weight:800;letter-spacing:.02em;color:#78350f;background:linear-gradient(135deg,#fde68a,#fbbf24);box-shadow:0 1px 4px rgba(217,119,6,.35);white-space:nowrap;vertical-align:middle}
+.pm-anek{margin:8px 0;padding:10px 12px;border-radius:14px;font-size:.8rem;line-height:1.4;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1)}.pm-anek.iyi{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)}.pm-anek.kotu{background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3)}
 .pm-rozet.tekil{color:#fff;background:linear-gradient(135deg,#14161C,#2b2f3d);box-shadow:0 0 0 1px rgba(201,162,75,.55),0 2px 8px rgba(201,162,75,.25)}
 /* admin ortak */
 .pa-wrap{font-family:inherit;color:var(--text-1,#18181b)}
@@ -303,6 +304,7 @@ function ekranHtml(o, ay) {
     h += '<div class="pm-hbar"><i style="width:' + yz + '%"></i><u style="left:calc(' + bek + '% - 1px)"></u></div>'
       + '<div class="pm-hb-yazi"><span>🎯 Hedef <b>' + PY(o.hedefYuzde) + '</b></span><span>' + (onde ? '<span class="pm-hiyi">' + TL(o.konumFark) + ' önde 👏</span>' : '<span class="pm-hkotu">' + TL(Math.abs(o.konumFark)) + ' geride</span>') + '</span></div>';
   }
+  if (o.anekdot && o.anekdot.m) h += '<div class="pm-anek ' + esc(o.anekdot.ton || 'n') + '">' + (o.anekdot.ton === 'iyi' ? '🌟 ' : '💬 ') + esc(o.anekdot.m) + '</div>';
   if (o.hedefYok) h += '<div class="pm-alt">🎯 Bu dönem için hedefin girilmedi; verimlilik kesintisi uygulanmaz.</div>';
   else h += '<div class="pm-kademe"><div><span>⚡ Verimlilik</span><b>' + PY(o.verimlilik) + '</b></div></div>'
     + (tabanAktif ? '<div class="pm-alt pm-iyi2">🎉 Hedefini tamamladın: puan oranın en az ' + PY(o.hedefTaban) + ' kalır.</div>' : '')
