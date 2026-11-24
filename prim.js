@@ -502,6 +502,11 @@ export function vitrinDenetim(ayar0, urunler, snap, bugun) {
   if (excelFark.length >= 3) u.push({ id: 'vitrin:excel', s: 'b', t: 'vitrin', b: 'Vitrin', m: excelFark.length + ' üründe Excel\'deki Prim ile sistem primi farklı. Örn. ' + excelFark.slice(0, 2).join(' · ') });
   return { uyarilar: u, snap: yeni, sifir };
 }
+// V12.9: Sonradan eklenen SC+ için prim (sabit ₺ varsa o; yoksa KDV'siz bedel × oran). bedel KDV dahil SC+ tutarı.
+export function scPrimi(ayar0, bedel) {
+  const A = ayarBirlestir(ayar0), s = A.sigorta, b = Number(bedel) || 0; if (!(b > 0)) return 0;
+  return Number(s.sabit) > 0 ? r2(s.sabit) : r2(kdvsizYap(b, s.kdv != null && s.kdv !== '' ? s.kdv : A.kdv) * (Number(s.oran) || 0) / 100);
+}
 // (5) Anekdot: bu hafta / geçen hafta + hedef temposu → personele nazik, yöneticiye konuşma önerisi
 export function haftaHesap(k, simdi) {
   const g = 864e5; let son = 0, once = 0;
@@ -522,6 +527,15 @@ export function anekdot(k, E, simdi) {
   return o;
 }
 
+// V12.9: Haftalık ekip özeti (yönetici): son 7 gün / önceki 7 gün, yükselen-düşen kişiler
+export function haftaOzeti(sonuc, simdi) {
+  const E = sonuc.ekip, yeterli = (E.gun || 0) >= 14; let son = 0, once = 0; const liste = [];
+  for (const k of sonuc.kisiler) { const h = haftaHesap(k, simdi); son += h.son; once += h.onceki; liste.push({ ad: k.ad, email: k.email, son: h.son, onceki: h.onceki, d: yeterli && h.onceki > 0 ? (h.son - h.onceki) / h.onceki * 100 : null }); }
+  const dl = liste.filter(x => x.d !== null);
+  const yuk = dl.filter(x => x.d >= 15).sort((a, b) => b.d - a.d).slice(0, 3), dus = dl.filter(x => x.d <= -25).sort((a, b) => a.d - b.d).slice(0, 3);
+  const sessiz = yeterli ? liste.filter(x => x.onceki > 0 && x.son === 0).map(x => x.ad) : [];
+  return { son: r2(son), onceki: r2(once), degisim: yeterli && once > 0 ? r2((son - once) / once * 100) : null, yeterli, yuk, dus, sessiz };
+}
 // ── Personelin okuyacağı TEK ÖZET doküman (başkasının TUTARI yok: yalnız sıra, ekip ortalaması %, lider baş harfi + %) ──
 const bashBasHarfler = ad => String(ad || '').trim().split(/\s+/).filter(Boolean).slice(0, 3).map(x => x.charAt(0).toLocaleUpperCase('tr')).join('.') + (String(ad || '').trim() ? '.' : '');
 // V12.6: verimlilik barem tablosunda bir üst kademe (yoksa null): { esik, oran, kalan }

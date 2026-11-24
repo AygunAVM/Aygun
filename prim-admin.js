@@ -5,8 +5,8 @@
 //   Ayarlar : KDV, gam/ürün/sigorta oranları, ekstra prim, hedefler, dönem dağılımı, gölge mod
 //  Firestore: meta/primAyarlar · meta/primHedefler (yalnız Admin) · primOzet/{ay__eposta} (personel kendi dokümanını okur)
 // ═══════════════════════════════════════════════════════════════
-import * as P from './prim.js?v=V12.8-20261123-2345';
-import { esc, TL, TL2, PY, kopru, kullanici, yonetici, ayar, ayarYukle, ayarUygula, cssEkle } from './prim-personel.js?v=V12.8-20261123-2345';
+import * as P from './prim.js?v=V12.9-20261124-0520';
+import { esc, TL, TL2, PY, kopru, kullanici, yonetici, ayar, ayarYukle, ayarUygula, cssEkle } from './prim-personel.js?v=V12.9-20261124-0520';
 
 const W = window, $ = id => document.getElementById(id);
 const kok = () => $('admin-prim-body');
@@ -245,6 +245,7 @@ function sorunSatiri(it) {
     + '<div class="pa2-edit-b" style="margin-top:12px">1 · Bu satıştan personele yazılacak prim (₺)</div>'
     + '<div class="pa2-tutar"><input class="pa-giris" id="pa-dz-tutar" inputmode="decimal" value="' + esc(tutar0) + '" placeholder="örn. 175,00"><button type="button" class="pa2-btn ikincil kucuk" data-pa-dzsistem="' + esc(String(sistem)) + '">Sistem tutarı</button><button type="button" class="pa2-btn ikincil kucuk" data-pa-dzsifir="1">₺0</button></div>'
     + (oneriler.length ? '<div class="pa-not" style="margin-top:8px">💡 Önerilen (normal tutarın altında) — indirimli satışta prim indirimle orantılı düşürülür:</div><div class="pa2-oner">' + oneriler.map(o => '<button type="button" class="pa2-cip" data-pa-dzsistem="' + o[1] + '">' + esc(o[0]) + ' → <b>' + TL2(o[1]) + '</b></button>').join('') + '</div>' : '')
+    + '<div class="pa2-sc"><div class="pa2-sc-b">🛡 SC+ sonradan eklendi mi?</div><div class="pa2-tutar"><input class="pa-giris" id="pa-dz-sc" inputmode="decimal" placeholder="SC+ bedeli (KDV dahil)"><button type="button" class="pa2-btn ikincil kucuk" data-pa-dzsc="' + esc(String(sistem)) + '">SC+ primini ekle</button></div><div class="pa-not">Mevcut prime SC+ primi (Ayarlar → Sigorta) eklenir, neden otomatik yazılır; satış rakamları değişmez.</div></div>'
     + '<div class="pa2-edit-b" style="margin-top:12px">2 · Bu tutar nasıl sayılsın?</div>'
     + '<label class="pa2-sec"><input type="radio" name="pa-dz-mod" value="brut"' + (mod !== 'kesin' ? ' checked' : '') + '><span><b>Satış primi olarak</b><small>Normal satış primi gibi işlenir; fazla indirim ve verimlilik kuralları yine uygulanır. <i>(Çoğu durumda bunu seçin.)</i></small></span></label>'
     + '<label class="pa2-sec"><input type="radio" name="pa-dz-mod" value="kesin"' + (mod === 'kesin' ? ' checked' : '') + '><span><b>Kesin tutar</b><small>Personele aynen bu kadar eklenir; hiçbir kesinti/çarpan uygulanmaz.</small></span></label>'
@@ -356,7 +357,8 @@ async function gorunumSil(email) {
 
 // ── HESAP (premium) ──
 // ═══ V12.8: PRİM SİGORTASI (aykırı değer koruması) + EKİP NABZI ═══
-let sigListe = [], sigNabiz = [], sigAcik = false, otoHesap = false;
+let sigListe = [], sigNabiz = [], sigAcik = false, otoHesap = false, haftaOz = null;
+const haftaAnahtar = () => { const d = new Date(Date.now() + 3 * 3600e3), t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const dow = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - dow); return t.toISOString().slice(0, 10); };
 const lsGet = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (_e) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_e) { /* */ } };
 const susturulmus = id => { const m = (ayar().uyariSustur || {})[id]; return !!m && Number(m.t) > Date.now() - 7 * 864e5; };
@@ -372,12 +374,23 @@ function sigHesapla() {
   sigListe = L.filter(x => !susturulmus(x.id));
   sigNabiz = [];
   if (sonuc) { try { sigNabiz = sonuc.kisiler.map(k => ({ k, a: P.anekdot(k, sonuc.ekip, Date.now()) })).filter(x => x.a.ton !== 'n' && x.a.yonetici).sort((a, b) => (a.a.ton === 'kotu' ? 0 : 1) - (b.a.ton === 'kotu' ? 0 : 1)); } catch (_e) { /* */ } }
+  haftaOz = null; if (sonuc && lsGet('prim-hafta-kapat') !== haftaAnahtar()) { try { haftaOz = P.haftaOzeti(sonuc, Date.now()); } catch (_e) { /* */ } }
   sigRozet();
   return sigListe;
 }
 const sigSayi = () => sigListe.filter(x => x.s === 'k' || x.s === 's').length;
 function sigRozet() {
   try { const b = document.querySelector('.admin-tab[data-tab="prim"]'); if (!b) return; const n = sigSayi(), kk = sigListe.some(x => x.s === 'k'); b.innerHTML = '💰 Prim' + (n ? ' <i class="pa2-say" style="' + (kk ? '' : 'background:#f59e0b') + '">' + n + '</i>' : ''); } catch (_e) { /* */ }
+}
+function haftaKart() {
+  const o = haftaOz; if (!o || !(o.son > 0 || o.onceki > 0)) return '';
+  const adlar = l => l.map(x => esc(String(x.ad).split(/\s+/)[0]) + ' (' + (x.d > 0 ? '+' : '') + Math.round(x.d) + '%)').join(', ');
+  let g = '<div class="pa2-hafta"><div class="pa2-hafta-ust"><b>📅 Haftalık özet</b><button type="button" class="pa2-sig-ok" data-pa-hafta-ok="1" title="Bu haftaki özeti kapat">✕</button></div>';
+  g += '<div class="pa2-hafta-s">Son 7 gün: <b>' + TL(o.son) + '</b> (KDV hariç)' + (o.degisim !== null ? ' · geçen haftaya göre <b class="' + (o.degisim >= 0 ? 'iyi' : 'kotu') + '">' + (o.degisim >= 0 ? '+' : '') + Math.round(o.degisim) + '%</b>' : ' · karşılaştırma için ay biraz ilerlemeli') + '</div>';
+  if (o.yuk.length) g += '<div class="pa2-hafta-s">🌟 Yükselenler: ' + adlar(o.yuk) + ' — tebrik edin.</div>';
+  if (o.dus.length) g += '<div class="pa2-hafta-s">🤔 Düşenler: ' + adlar(o.dus) + ' — “Hayırdır, ne oldu?” diye sorun.</div>';
+  if (o.sessiz.length) g += '<div class="pa2-hafta-s">💤 Son 7 gün satışsız: ' + o.sessiz.map(x => esc(String(x).split(/\s+/)[0])).join(', ') + '</div>';
+  return g + '</div>';
 }
 function sigKart() {
   const L = sigListe, kk = L.filter(x => x.s === 'k'), ss = L.filter(x => x.s === 's'), bb = L.filter(x => x.s === 'b');
@@ -386,6 +399,7 @@ function sigKart() {
   h += goster.map(x => '<div class="pa2-sig-s ' + x.s + '"><span class="pa2-sig-d">' + (x.s === 'k' ? '🔴' : x.s === 's' ? '🟡' : '⚪') + '</span><div><b>' + esc(x.b || '') + '</b> ' + esc(x.m) + '</div><span class="pa2-sig-b">' + (x.kisi ? '<button type="button" class="pa2-sig-git" data-pa-sig-git="' + esc(x.kisi) + '">Git</button>' : '') + '<button type="button" class="pa2-sig-ok" data-pa-sig-ok="' + esc(x.id) + '" title="Kontrol ettim; 7 gün hatırlatma">✓</button></span></div>').join('');
   const kalan = L.length - goster.length; if (kalan > 0 || sigAcik && L.length > 4) h += '<button type="button" class="pa2-sig-daha" data-pa-sig-daha="1">' + (sigAcik ? 'Daha az göster' : '+' + kalan + ' uyarı daha') + '</button>';
   h += '</div>';
+  h += haftaKart();
   if (sigNabiz.length) h += '<div class="pa2-nabiz"><div class="pa2-nabiz-b">💬 Ekip nabzı</div>' + sigNabiz.slice(0, 5).map(x => '<div class="pa2-nabiz-s ' + x.a.ton + '"><span>' + (x.a.ton === 'iyi' ? '🌟' : '🤔') + '</span><div><b>' + esc(x.k.ad) + '</b> ' + esc(x.a.yonetici.replace(/^[^,:]+[,:] ?/, '')) + '</div></div>').join('') + '</div>';
   return h;
 }
@@ -799,6 +813,7 @@ function olayBagla() {
     if (d.paDzkapat) { dzAcik = ''; dzHata = ''; dzTaslak = null; return yeniden(); }
     if (d.paDzgit !== undefined) { alt = 'sorun'; sorunFiltre = 'tumu'; sorunKisi = ''; sorunAra = d.paDzgit; dzAcik = d.paDzgit; return yeniden(); }
     if (d.paDzsistem !== undefined) { const i = $('pa-dz-tutar'); if (i) i.value = String(d.paDzsistem).replace('.', ','); return; }
+    if (d.paDzsc !== undefined) { const b = P.sayiya(($('pa-dz-sc') || {}).value), sp = P.scPrimi(ayar(), b); if (!(b > 0)) { hata = 'SC+ bedelini yazın (örn. 4999).'; return yeniden(); } if (!(sp > 0)) { hata = 'Ayarlar → Sigorta bölümünde SC+ prim oranı/sabiti tanımlı değil; önce onu girin.'; return yeniden(); } const i = $('pa-dz-tutar'), n = $('pa-dz-neden'); if (i) i.value = String(P.r2(P.sayiya(d.paDzsc) + sp)).replace('.', ','); if (n) n.value = 'SC+ sonradan eklendi (' + b + ' ₺) +' + sp + ' ₺'; return; }
     if (d.paDzsifir) { const i = $('pa-dz-tutar'); if (i) i.value = '0'; return; }
     if (d.paDznedenyaz !== undefined) { const i = $('pa-dz-neden'); if (i) { i.value = d.paDznedenyaz; i.focus(); } return; }
     if (d.paDzkaydet !== undefined) return duzeltmeKaydet(d.paDzkaydet);
@@ -827,6 +842,7 @@ function olayBagla() {
     if (t.id === 'pa-gam-yeni-ekle') { const v = $('pa-gam-yeni'), ad = v ? v.value.trim() : ''; if (ad && !(ad in taslak.gamKategori)) taslak.gamKategori[ad] = ''; return yeniden(); }
     if (t.id === 'pa-urun-ekle') { const v = $('pa-urun-yeni'), k = v ? v.value.trim() : ''; if (k && !taslak.urunler[k]) taslak.urunler[k] = {}; return yeniden(); }
     if (d.paUrunSil) { delete taslak.urunler[d.paUrunSil]; return yeniden(); }
+    if (d.paHaftaOk) { lsSet('prim-hafta-kapat', haftaAnahtar()); haftaOz = null; return yeniden(); }
     if (d.paSigOk) return sigSustur(d.paSigOk);
     if (d.paSigDaha) { sigAcik = !sigAcik; return yeniden(); }
     if (d.paSigGit) { acikKisi = d.paSigGit; alt = 'hesap'; yeniden(); const e2 = document.querySelector('.pa2-kisi.acik'); if (e2 && e2.scrollIntoView) e2.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -970,6 +986,8 @@ W.PrimAdmin = { arkaPlan, ac, yenile: () => { taslak = null; return ac(); }, ver
 .pa2-sig-s{display:flex;gap:8px;align-items:flex-start;padding:9px 0;border-top:1px dashed rgba(20,22,28,.1);font-size:.8rem;line-height:1.35}.pa2-sig-s>div{flex:1;min-width:0}.pa2-sig-d{flex:none}
 .pa2-sig-b{flex:none;display:flex;gap:6px}.pa2-sig-git,.pa2-sig-ok{border:1px solid rgba(20,22,28,.15);background:#fff;border-radius:9px;padding:4px 9px;font:inherit;font-size:.72rem;font-weight:700;cursor:pointer}.pa2-sig-ok{color:#1b7f3b}
 .pa2-sig-daha{width:100%;margin-top:6px;border:0;background:rgba(20,22,28,.05);border-radius:10px;padding:8px;font:inherit;font-size:.76rem;font-weight:700;cursor:pointer}
+.pa2-sc{margin-top:12px;padding:10px 12px;border-radius:14px;background:linear-gradient(180deg,#FBF8EF,#fff);border:1px solid rgba(201,162,75,.4)}.pa2-sc-b{font-weight:800;font-size:.82rem;margin-bottom:6px}
+.pa2-hafta{border-radius:18px;padding:12px 14px;margin:12px 0;background:linear-gradient(135deg,#14161C,#232733);color:#fff;border:1px solid rgba(201,162,75,.45)}.pa2-hafta-ust{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;color:#E6C77A}.pa2-hafta-s{font-size:.8rem;line-height:1.4;padding:5px 0;border-top:1px dashed rgba(255,255,255,.14)}.pa2-hafta-s b.iyi{color:#6ee7a0}.pa2-hafta-s b.kotu{color:#fca5a5}
 .pa2-nabiz{border-radius:18px;padding:12px 14px;margin:12px 0;background:linear-gradient(180deg,#FBF8EF,#fff);border:1px solid rgba(201,162,75,.35)}.pa2-nabiz-b{font-weight:800;font-size:.9rem;margin-bottom:6px}
 .pa2-nabiz-s{display:flex;gap:8px;align-items:flex-start;padding:7px 0;font-size:.8rem;line-height:1.35;border-top:1px dashed rgba(20,22,28,.08)}.pa2-nabiz-s:first-of-type{border-top:0}
 .pa2-nabiz-s.kotu{color:#7a3b00}.pa2-nabiz-s.iyi{color:#14532d}
