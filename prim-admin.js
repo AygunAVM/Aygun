@@ -5,11 +5,12 @@
 //   Ayarlar : KDV, gam/ürün/sigorta oranları, ekstra prim, hedefler, dönem dağılımı, gölge mod
 //  Firestore: meta/primAyarlar · meta/primHedefler (yalnız Admin) · primOzet/{ay__eposta} (personel kendi dokümanını okur)
 // ═══════════════════════════════════════════════════════════════
-import * as P from './prim.js?v=V12.10-20261124-1215';
-import { esc, TL, TL2, PY, kopru, kullanici, yonetici, ayar, ayarYukle, ayarUygula, cssEkle } from './prim-personel.js?v=V12.10-20261124-1215';
+import * as P from './prim.js?v=V12.12-20261125-0300';
+import { esc, TL, TL2, PY, kopru, kullanici, yonetici, ayar, ayarYukle, ayarUygula, cssEkle } from './prim-personel.js?v=V12.12-20261125-0300';
 
 const W = window, $ = id => document.getElementById(id);
 const kok = () => $('admin-prim-body');
+let destekListesi = [], destekVeri = null;
 let alt = 'hesap', ay = P.ayStr(Date.now()), kapGun = P.gunStr(Date.now());
 let taslak = null, hedefTaslak = {}, hedeflerYuklendi = false, kisiListesi = null;
 const detAcik = new Set();
@@ -29,8 +30,8 @@ async function hedefleriYukle() {
 }
 async function kisileriYukle() {
   if (kisiListesi) return;
-  const b = kopru(); kisiListesi = [];
-  try { const sn = await b.getDocs(b.collection(b.db, 'kullanicilar')); sn.docs.forEach(d => { const x = d.data(); if (x && x.Email && !x.Kilitli && String(x.Rol || '').toLowerCase() === 'satis') kisiListesi.push({ email: String(x.Email).toLowerCase(), ad: String(x.Ad || String(x.Email).split('@')[0]) }); }); kisiListesi.sort((a, c) => a.ad.localeCompare(c.ad, 'tr')); }
+  const b = kopru(); kisiListesi = []; destekListesi = [];
+  try { const sn = await b.getDocs(b.collection(b.db, 'kullanicilar')); sn.docs.forEach(d => { const x = d.data(); if (x && x.Email && !x.Kilitli && String(x.Rol || '').toLowerCase() === 'destek') destekListesi.push({ email: String(x.Email).toLowerCase(), ad: String(x.Ad || String(x.Email).split('@')[0]) }); if (x && x.Email && !x.Kilitli && String(x.Rol || '').toLowerCase() === 'satis') kisiListesi.push({ email: String(x.Email).toLowerCase(), ad: String(x.Ad || String(x.Email).split('@')[0]) }); }); kisiListesi.sort((a, c) => a.ad.localeCompare(c.ad, 'tr')); destekListesi.sort((a, c) => a.ad.localeCompare(c.ad, 'tr')); }
   catch (e) { hata = 'Kullanıcı listesi okunamadı: ' + (e && e.message); }
 }
 async function ayarKaydetBelge(kismi) {   // meta/primAyarlar'a birleştirerek yazar
@@ -433,6 +434,42 @@ async function arkaPlan() {
   } catch (e) { console.warn('prim sigortası arka plan:', e && e.message); }
 }
 
+// ═══ V12.11: DESTEK EKİBİ (satış ekibi ortalaması × skor; skor = anket + görünüm) ═══
+async function destekYukle() {
+  const A = ayar().destek; if (!A || !A.aktif || !sonuc) { destekVeri = null; return; }
+  await kisileriYukle(); const b = kopru(); let anketler = [], yon = {};
+  try { const sn = await b.getDocs(b.query(b.collection(b.db, 'destekAnket'), b.where('ay', '==', ay))); anketler = sn.docs.map(d => d.data()); } catch (e) { hata = 'Destek anketi okunamadı: ' + (e && e.message); }
+  for (const d of destekListesi) { try { const s = await b.getDoc(b.doc(b.db, 'primOzet', P.destekYonId(ay, d.email))); if (s.exists()) yon[d.email] = s.data(); } catch (_e) { /* yok */ } }
+  destekVeri = { ay, anketler, yon };
+}
+const destekHesap = () => (destekVeri && sonuc) ? P.destekPrimleri(sonuc, ayar(), destekListesi, destekVeri.anketler, destekVeri.yon) : [];
+async function destekGorunum(v) {
+  const [em, n] = String(v).split('|'), g = Number(n); if (!em || !(g >= 1 && g <= 5) || !destekVeri) return;
+  const b = kopru(), kay = { email: em, ay, gorunum: g, u: (kullanici() || {}).Email || '', t: Date.now(), tur: 'destekYon' };
+  try { await b.setDoc(b.doc(b.db, 'primOzet', P.destekYonId(ay, em)), kay); destekVeri.yon[em] = kay; mesaj = '✓ Görünüm puanı kaydedildi.'; hata = ''; }
+  catch (e) { hata = 'Kaydedilemedi: ' + (e && e.message); }
+  yeniden();
+}
+function destekKart() {
+  const A = ayar().destek; if (!A || !A.aktif || !sonuc) return '';
+  const bas = '<div class="pa4-destek"><div class="pa4-ust"><span class="pa4-ik">🤝</span><div><b>Destek ekibi</b><small>Satış ekibi ortalamasının %' + A.min + '–%' + A.max + '\'i' + (A.deneme !== false ? ' · 🧪 deneme' : '') + ' · skor: anket %' + A.anketAgirlik + ' + görünüm %' + (100 - A.anketAgirlik) + '</small></div></div>';
+  if (!destekVeri) return bas + '<p class="pa-not">Yükleniyor…</p></div>';
+  if (!destekListesi.length) return bas + '<p class="pa-not">Rolü “destek” olan kullanıcı yok.</p></div>';
+  const L = destekHesap();
+  return bas + L.map(d => '<div class="pa4-kisi"><div class="pa4-s1"><b>' + esc(d.ad) + '</b><span class="pa4-tut">' + TL(d.tutar) + '</span></div>'
+    + '<div class="pa4-chips"><span>Skor <b>' + Math.round(d.skor) + '</b>/100</span><span>%' + Math.round(d.yuzde) + ' oran</span><span>' + (d.anketN ? 'Anket: ' + d.anketN + ' kişi · ' + String(d.anketOrt).replace('.', ',') + '/5' : 'Anket yok') + '</span>' + (d.sinirli ? '<span class="uy">satış ekibi sınırına takıldı</span>' : '') + (d.kaynak === 'varsayilan' ? '<span class="uy">veri yok → nötr skor</span>' : '') + '</div>'
+    + '<div class="pa4-gor"><small>Görünüm · kılık kıyafet · düzen</small><div class="pa4-pil">' + [1, 2, 3, 4, 5].map(n => '<button type="button" class="' + (d.gorunum === n ? 'on' : '') + '" data-pa-dgor="' + esc(d.email) + '|' + n + '">' + n + '</button>').join('') + '</div></div>'
+    + (d.anketN ? '<div class="pa4-sor">' + P.DESTEK_SORU.map(s => esc(s.ad) + ' <b>' + (d.sorular[s.k] != null ? String(d.sorular[s.k]).replace('.', ',') : '—') + '</b>').join(' · ') + '</div>' : '') + '</div>').join('')
+    + '<p class="pa-not" style="margin-top:8px">Hak ediş = satış ekibi ortalaması (' + TL(L[0] ? L[0].havuzOrt : 0) + ') × oran; satış ekibinin en düşüğünden düşük, en yükseğinden yüksek olamaz. Anket sonuçları anonimdir. ' + (A.deneme !== false ? '<b>Deneme modu açık:</b> bu skor personele gitmez.' : 'Personele <b>Yayınla</b> ile gider.') + '</p></div>';
+}
+function destekAyarHtml(T) {
+  const D = T.destek || {};
+  return '<div class="pa-kart"><h4>🤝 Destek ekibi puanı</h4><p class="pa-not">Rolü “destek” olanlar için: hak ediş = satış ekibi ortalaması × oran. Oran, <b>skora</b> göre alt-üst sınır arasında değişir; sonuç satış ekibinin en düşük/en yüksek hak edişini aşmaz. Skoru satış ekibinin anonim anketi ve yöneticinin görünüm (kılık kıyafet, düzen) puanı belirler.</p>'
+    + onoff(['destek', 'aktif'], D.aktif === true, '<b>Destek puanı açık</b> (kapalıyken hiçbir şey değişmez)') + onoff(['destek', 'deneme'], D.deneme !== false, '<b>Deneme modu</b> (skor yalnız burada görünür; destek personeline YAYINLANMAZ — ilk 1–2 ay önerilir)')
+    + '<div class="pa-sat" style="grid-template-columns:1fr 90px"><span>En düşük oran (%)</span>' + gir(['destek', 'min'], D.min) + '</div>'
+    + '<div class="pa-sat" style="grid-template-columns:1fr 90px"><span>En yüksek oran (%)</span>' + gir(['destek', 'max'], D.max) + '</div>'
+    + '<div class="pa-sat" style="grid-template-columns:1fr 90px"><span>Anket ağırlığı (%) <small>(kalanı görünüm)</small></span>' + gir(['destek', 'anketAgirlik'], D.anketAgirlik) + '</div></div>';
+}
 function hesapHtml() {
   const E = sonuc && sonuc.ekip;
   let h = '<div class="pa2-hero"><div class="pa2-hero-ust"><div><div class="pa2-eyebrow">PRİM YÖNETİMİ</div><div class="pa2-hero-b">' + esc(P.ayAdi(ay)) + '</div>'
@@ -445,7 +482,7 @@ function hesapHtml() {
     const topBrut = topla(k => k.brutToplam), topHak = topla(k => k.hakEdis), hy = E.toplamHedef > 0 ? E.toplamKdvsiz / E.toplamHedef * 100 : 0;
     h += '<div class="pa2-kpi"><div><span>Teslim satış</span><b>' + TL(E.toplamKdvsiz) + '</b></div><div><span>Hedefe göre</span><b>' + (E.toplamHedef > 0 ? PY(hy) : '—') + '</b></div><div><span>Brüt prim</span><b>' + TL(topBrut) + '</b></div><div><span>Toplam hak ediş</span><b>' + TL(topHak) + '</b></div></div>';
   }
-  h += '</div>' + sigKart();
+  h += '</div>' + sigKart() + destekKart();
   if (!sonuc) return h + '<div class="pa2-bos"><div class="pa2-bos-i">💰</div><b>Henüz hesap yok</b><p>Ay seçip <b>Hesapla</b>ya basın. (Okuma: ayda teslim edilen satış sayısı kadar.)</p></div>' + aracKartlari();
   const sn = sorunSayisi(), dn = satisListesi().filter(i => i.d.duzeltme).length;
   if (sn || dn) h += '<button type="button" class="pa2-uyaris" data-pa-alt="sorun"><span>🛠</span><div><b>' + (sn ? sn + ' satışta dikkat edilmesi gereken durum var' : dn + ' satışın primi düzeltilmiş') + '</b><small>' + (sn ? 'Fiyatı elle çekilen, primi çıkmayan, gamı tanımsız satışlar → primi buradan düzeltebilirsiniz' : 'Düzeltmeleri görmek ve değiştirmek için dokunun') + '</small></div><i>›</i></button>';
@@ -489,7 +526,7 @@ async function hesapla() {
     const ad = aktifDonem(); hesapDonem = ad; if (ad) ay = ad.bas.slice(0, 7);
     sonKayitlar = await ayKayitlari(ay, ad ? P.donemBilgi(ay, ad) : null); let ek = 0; bekleyenKayitlar = [];
     if (ayar().sevkiyatsizSay && !ad) { const dn = await ayDenetim(ay); dn.filter(x => x.durum === 'sevkiyatsiz').forEach(x => { sonKayitlar.push({ sale: x.sale, damga: P.damgaGecerli(x.sale.prim), teslimT: Date.parse(x.sale.ts) }); ek++; }); }
-    sonuc = sonucHesapla(); dzAcik = '';
+    sonuc = sonucHesapla(); dzAcik = ''; destekVeri = null; try { await destekYukle(); } catch (_e) { /* */ }
     mesaj = (sonKayitlar.length - ek) + ' teslim edilmiş satış okundu' + (ek ? ' + ' + ek + ' sevkiyatsız satış (satış tarihiyle)' : '') + '.';
   } catch (e) { hata = 'Hesap yapılamadı: ' + (e && e.message); sonuc = null; }
   yeniden();
@@ -575,7 +612,8 @@ async function yayinla() {
     yenidenHesapla();
     const simdi = Date.now(), liste = sonuc.kisiler;
     for (let i = 0; i < liste.length; i += 400) { const bt = b.writeBatch(b.db); liste.slice(i, i + 400).forEach(k => bt.set(b.doc(b.db, 'primOzet', P.ozetDocId(ay, k.email)), kopya(P.kisiOzeti(sonuc, k, simdi, ayar())))); await bt.commit(); }
-    mesaj += '✓ ' + liste.length + ' kişinin özeti yayınlandı' + (bekleyenKayitlar.length ? ' (' + bekleyenKayitlar.length + ' bekleyen satış dahil)' : '') + '.';
+    let dN = 0; if (ayar().destek && ayar().destek.aktif && ayar().destek.deneme === false) { try { await destekYukle(); const dl = destekHesap(), bt = b.writeBatch(b.db); dl.forEach(x => bt.set(b.doc(b.db, 'primOzet', P.ozetDocId(ay, x.email)), kopya(P.destekOzeti(x, ay, simdi, ayar())))); if (dl.length) await bt.commit(); dN = dl.length; } catch (e3) { mesaj += 'Destek özeti yazılamadı (' + (e3 && e3.message) + '). '; } }
+    mesaj += '✓ ' + liste.length + ' kişinin özeti yayınlandı' + (dN ? ' + ' + dN + ' destek' : '') + (bekleyenKayitlar.length ? ' (' + bekleyenKayitlar.length + ' bekleyen satış dahil)' : '') + '.';
   } catch (e) { hata = 'Yayınlanamadı: ' + (e && e.message) + (/permission/i.test(String(e && e.message)) ? ' — Firestore kuralları (Aşama H) yayınlanmamış olabilir.' : ''); }
   yeniden();
 }
@@ -731,7 +769,7 @@ function ayarHtml() {
     + '<div class="pa-sat" style="grid-template-columns:1fr 90px"><span>Verimlilikte hedef payı</span>' + gir(['verimlilik', 'hedef'], T.verimlilik.hedef) + '</div>'
     + '<div class="pa-sat" style="grid-template-columns:1fr 90px"><span>Verimlilikte nitelikli payı</span>' + gir(['verimlilik', 'nitelikli'], T.verimlilik.nitelikli) + '</div>'
     + '<p class="pa-not">Ay içi hedef dağılımı (%): 1–10. gün · 11–20. gün · 21–son gün</p><div class="pa-sat" style="grid-template-columns:1fr 1fr 1fr">' + [0, 1, 2].map(i => gir(['donem', i, 'pay'], T.donem[i] ? T.donem[i].pay : '')).join('') + '</div></div>';
-  h += baremHtml(T) + gorunumAyarHtml(T) + simulasyonHtml();
+  h += baremHtml(T) + gorunumAyarHtml(T) + destekAyarHtml(T) + simulasyonHtml();
   const katAdlari = Object.keys(T.kategoriler), secKat = (yol, v) => '<select class="pa-giris" style="width:auto" data-pa-yol="' + esc(JSON.stringify(yol)) + '" data-pa-metin="1"><option value="">— kategori seçin —</option>' + katAdlari.map(c => '<option value="' + esc(c) + '"' + (c === v ? ' selected' : '') + '>' + esc(c) + '</option>').join('') + '</select>';
   h += '<div class="pa-kart pa-kaydir"><h4>Kategori oranları</h4><p class="pa-not">Prim = KDV\'siz satış × oran. Oran <b>kategoriye</b> göre uygulanır (eski Excel ile aynı). <b>Nitelikli</b> kategoriler verimlilikte sayılır; <b>verimsiz</b> (IT/Elektronik) sayılmaz. KDV boşsa varsayılan kullanılır.</p>'
     + '<table class="pa-tab"><thead><tr><th>Kategori</th><th>Grup</th><th>Oran %</th><th>KDV %</th></tr></thead><tbody>'
@@ -777,6 +815,7 @@ function ayarTemizle(T) {
   const G = T.gorunum || {}; o.gorunum = { acik: G.acik !== false, tavan: kisit(G.tavan, 0, 100), olumlu: G.olumlu === true, bonusTavan: kisit(G.bonusTavan, 0, 100) };
   const bit = [10, 20, 31]; o.donem = [0, 1, 2].map(i => ({ bitis: bit[i], pay: sayi(T.donem[i] && T.donem[i].pay) }));
   o.gamlar = {}; Object.keys(T.gamlar).forEach(g => { const n = String(g).trim(); if (!n) return; const x = T.gamlar[g]; o.gamlar[n] = { grup: x.grup === 'verimsiz' ? 'verimsiz' : 'nitelikli', oran: sayi(x.oran), ...(String(x.kdv ?? '').trim() !== '' ? { kdv: sayi(x.kdv) } : {}), ...(x.kume ? { kume: x.kume } : {}) }; });
+  const DE = T.destek || {}; o.destek = { aktif: DE.aktif === true, min: kisit(DE.min, 0, 300), max: kisit(DE.max, 0, 300), anketAgirlik: kisit(DE.anketAgirlik, 0, 100), deneme: DE.deneme !== false, liste: (destekListesi && destekListesi.length ? destekListesi : (DE.liste || [])).map(x => ({ email: x.email, ad: x.ad })) };   // personel anketi için destek kişi listesi (personel kullanıcı listesini okuyamaz)
   o.surum = 2;
   o.kategoriler = {}; Object.keys(T.kategoriler).forEach(c => { const x = T.kategoriler[c]; o.kategoriler[c] = { grup: x.grup === 'verimsiz' ? 'verimsiz' : 'nitelikli', oran: sayi(x.oran), ...(String(x.kdv ?? '').trim() !== '' ? { kdv: sayi(x.kdv) } : {}), ...(x.kume ? { kume: x.kume } : {}) }; });
   o.gamKategori = {}; Object.keys(T.gamKategori).forEach(g => { const n = String(g).trim(); if (n) o.gamKategori[n] = String(T.gamKategori[g] || ''); });
@@ -792,6 +831,7 @@ function enUste() {
   git(); setTimeout(git, 60); setTimeout(git, 250);
 }
 async function ayarKaydet() {
+  try { await kisileriYukle(); } catch (_e) { /* destek listesi okunamazsa mevcut liste korunur */ }
   const hz = [];
   if (!(sayi(taslak.verimlilik.hedef) + sayi(taslak.verimlilik.nitelikli) > 0)) hz.push('Verimlilik payları toplamı 0 olamaz.');
   const dp = [0, 1, 2].reduce((a, i) => a + sayi(taslak.donem[i] && taslak.donem[i].pay), 0); if (Math.abs(dp - 100) > 0.01) hz.push('Ay içi dağılım toplamı %100 olmalı (şu an %' + dp + ').');
@@ -859,6 +899,7 @@ function olayBagla() {
     if (t.id === 'pa-urun-ekle') { const v = $('pa-urun-yeni'), k = v ? v.value.trim() : ''; if (k && !taslak.urunler[k]) taslak.urunler[k] = {}; return yeniden(); }
     if (d.paUrunSil) { delete taslak.urunler[d.paUrunSil]; return yeniden(); }
     if (d.paHaftaOk) { lsSet('prim-hafta-kapat', haftaAnahtar()); haftaOz = null; return yeniden(); }
+    if (d.paDgor) return destekGorunum(d.paDgor);
     if (d.paSigSifirla) return sigSifirla();
     if (d.paSigOk) return sigSustur(d.paSigOk);
     if (d.paSigDaha) { sigAcik = !sigAcik; return yeniden(); }
@@ -877,7 +918,7 @@ function olayBagla() {
     if (t.id === 'pa-ay' && ev.type === 'change' && t.value) { ay = t.value; ozelBas = ''; ozelBit = ''; if (ozelAcik) { const D0 = P.donemBilgi(ay); ozelBas = D0.bas; ozelBit = D0.bit; } sonuc = null; sonKayitlar = []; bekleyenKayitlar = []; return yeniden(); }
     if ((t.id === 'pa-sorun-kisi' || t.id === 'pa-sorun-sira') && ev.type === 'change') { if (t.id === 'pa-sorun-kisi') sorunKisi = t.value; else sorunSira = t.value; dzAcik = ''; return yeniden(); }
     if (t.id === 'pa-ozel-bas') { ozelBas = t.value; return; } if (t.id === 'pa-ozel-bit') { ozelBit = t.value; return; }
-    if (t.dataset.paYol) { const y = JSON.parse(t.dataset.paYol), v = t.dataset.paKutu ? t.checked : t.value; if (y[0] === 'donem' && !taslak.donem[y[1]]) taslak.donem[y[1]] = { bitis: [10, 20, 31][y[1]], pay: '' }; yolYaz(taslak, y, v); if (t.dataset.paYeniden) yeniden(); }
+    if (t.dataset.paYol) { const y = JSON.parse(t.dataset.paYol), v = t.dataset.paKutu ? t.checked : t.value; if (t.dataset.paKutu && t.blur) { try { t.blur(); } catch (_e) { /* */ } } if (y[0] === 'donem' && !taslak.donem[y[1]]) taslak.donem[y[1]] = { bitis: [10, 20, 31][y[1]], pay: '' }; yolYaz(taslak, y, v); if (t.dataset.paYeniden) yeniden(); }
     else if (t.dataset.paHedef !== undefined) { const em = t.dataset.paHedef; hedefTaslak[em] = hedefTaslak[em] || { ad: t.dataset.paAd }; hedefTaslak[em].tutar = t.value; }
     else if (t.dataset.paHedefAy !== undefined) { const em = t.dataset.paHedefAy; hedefTaslak[em] = hedefTaslak[em] || { ad: t.dataset.paAd }; hedefTaslak[em].aylik = hedefTaslak[em].aylik || {}; hedefTaslak[em].aylik[ay] = t.value; }
   };
@@ -886,7 +927,7 @@ function olayBagla() {
   el.addEventListener('input', degisti); el.addEventListener('change', degisti);
 }
 async function ac() { await acIc(); olayBagla(); if (yonetici() && !sonuc && !otoHesap && alt === 'hesap') { otoHesap = true; hesapla(); } }
-W.PrimAdmin = { arkaPlan, ac, yenile: () => { taslak = null; return ac(); }, versiyon: 'V12.8' };
+W.PrimAdmin = { arkaPlan, ac, yenile: () => { taslak = null; return ac(); }, versiyon: 'V12.11' };
 
 // ── V12.7: Premium admin teması (tüm admin paneli) ───────────────────────────
 (function premiumTema() {
@@ -968,6 +1009,7 @@ W.PrimAdmin = { arkaPlan, ac, yenile: () => { taslak = null; return ac(); }, ver
 #admin-modal .pa2-ozel .pa2-oz-k{background:linear-gradient(180deg,#fff 0%,#FBF8EF 100%);border:1px solid rgba(201,162,75,.38);border-radius:18px;padding:14px;margin:12px 0;box-shadow:0 1px 2px rgba(20,22,28,.04),0 10px 26px rgba(201,162,75,.12)}
 #admin-modal .pa2-ozel .pa2-oz-ust{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 #admin-modal .pa2-ozel .pa2-oz-yildiz{flex:none;width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1.05rem;background:linear-gradient(145deg,#E6C77A,#C9A24B);box-shadow:0 3px 10px rgba(201,162,75,.45)}
+#admin-modal .pa2-sw{position:relative}#admin-modal .pa2-sw input{left:0;top:0;width:1px;height:1px}
 #admin-modal .pa2-ozel .pa2-oz-ust .pa2-sw{flex:1;min-width:0;margin:0;padding:8px 12px;background:rgba(20,22,28,.04);border-radius:12px}
 #admin-modal .pa2-ozel .pa2-oz-sil{flex:none;width:34px;height:34px;padding:0;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:.9rem;line-height:1}
 #admin-modal .pa2-ozel .pa2-urunsec{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;width:100%;box-sizing:border-box;text-align:left;border:1.5px solid rgba(201,162,75,.55);background:#fff;border-radius:14px;padding:11px 12px;margin:0 0 10px;cursor:pointer;font:inherit;color:inherit;-webkit-appearance:none;appearance:none;box-shadow:0 2px 8px rgba(201,162,75,.12)}
@@ -1026,6 +1068,14 @@ W.PrimAdmin = { arkaPlan, ac, yenile: () => { taslak = null; return ac(); }, ver
 .pa3-git,.pa3-onay{font:inherit;font-size:.72rem;font-weight:800;border-radius:99px;padding:7px 12px;cursor:pointer;white-space:nowrap}
 .pa3-git{background:transparent;color:#F4F1E8;border:1px solid rgba(255,255,255,.28)}.pa3-onay{border:0;color:#14161C;background:linear-gradient(135deg,#E6C77A,#C9A24B);box-shadow:0 3px 10px rgba(201,162,75,.35)}
 .pa3-daha,.pa3-sifirla{display:block;width:100%;margin-top:8px;border:0;border-radius:12px;padding:9px;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;background:rgba(255,255,255,.07);color:rgba(244,241,232,.8)}.pa3-sifirla{background:transparent;font-weight:600;color:rgba(244,241,232,.5)}
+.pa4-destek{border-radius:22px;padding:14px 14px 12px;margin:14px 0;background:linear-gradient(180deg,#FFFDF7,#F7F2E4);border:1px solid rgba(201,162,75,.5);box-shadow:0 8px 24px rgba(20,22,28,.08)}
+.pa4-ust{display:flex;gap:12px;align-items:center;margin-bottom:8px}.pa4-ik{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-size:1.2rem;background:linear-gradient(135deg,#14161C,#2B3040)}
+.pa4-ust b{display:block;font-size:1rem}.pa4-ust small{display:block;font-size:.7rem;color:#6b6350;margin-top:1px}
+.pa4-kisi{margin-top:10px;padding:12px;border-radius:16px;background:#fff;border:1px solid rgba(20,22,28,.07)}
+.pa4-s1{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.pa4-tut{font-size:1.15rem;font-weight:800;color:#14161C}
+.pa4-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.pa4-chips span{font-size:.7rem;padding:4px 9px;border-radius:99px;background:#F1EEE4;color:#3d3a2e}.pa4-chips span.uy{background:#FEF3C7;color:#92400e}
+.pa4-gor small{display:block;font-size:.7rem;color:#6b6350;margin-bottom:5px}.pa4-pil{display:flex;gap:6px}.pa4-pil button{flex:1;border:1px solid rgba(20,22,28,.15);background:#fff;border-radius:12px;padding:9px 0;font:inherit;font-weight:800;cursor:pointer}.pa4-pil button.on{background:linear-gradient(135deg,#E6C77A,#C9A24B);border-color:#C9A24B;color:#14161C}
+.pa4-sor{margin-top:8px;font-size:.68rem;line-height:1.5;color:#6b6350}
 @media print{#admin-modal{display:none}}`;
   document.head.appendChild(s);
 })();

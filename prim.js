@@ -45,6 +45,7 @@ export function varsayilanAyar() {
     // hedefTaban: hedefi tutturan (hedef ≥ %100) kişide ödenen oran en az bu kadar (0 = kapalı)
     verimlilik: { hedef: 0.4, nitelikli: 0.6, mod: 'barem', baremler: [{ esik: 85, oran: 100 }, { esik: 75, oran: 85 }, { esik: 65, oran: 75 }, { esik: 50, oran: 70 }], hedefTaban: 90 },
     puanKatsayisi: 0.1,                            // V12.6: personel ekranında 1 ₺ hak ediş = 0,1 puan (₺ değil PUAN gösterilir)
+    destek: { aktif: false, deneme: true, min: 85, max: 115, anketAgirlik: 40 },   // V12.11: destek ekibi puanı — satış ekibi ortalamasının %min–%max'ı; skoru anket (satış ekibi) + yönetici görünüm puanı belirler
     gorunum: { acik: true, tavan: 10, olumlu: false, bonusTavan: 5 },   // V12.6: görünüm / gizli müşteri çarpanı (admin girer; hak edişten düşer)
     indirim: { k: 2, alt: 0.7 },                   // ekip ortalamasının 1 puan üstü = prim −%k; katsayı en az "alt"
     noktalar: [
@@ -70,6 +71,7 @@ export function ayarBirlestir(k) {
   o.verimlilik = { ...v.verimlilik, ...(k.verimlilik || {}) };
   o.verimlilik.baremler = Array.isArray(o.verimlilik.baremler) && o.verimlilik.baremler.length ? o.verimlilik.baremler.map(b => ({ esik: Number(b.esik) || 0, oran: Number(b.oran) || 0 })).sort((a, b) => b.esik - a.esik) : v.verimlilik.baremler;
   o.gorunum = { ...v.gorunum, ...(k.gorunum || {}) };
+  o.destek = { ...v.destek, ...(k.destek || {}) };
   o.puanKatsayisi = Number(k.puanKatsayisi) > 0 ? Number(k.puanKatsayisi) : v.puanKatsayisi;
   o.indirim = { ...v.indirim, ...(k.indirim || {}) };
   o.urunler = k.urunler && typeof k.urunler === 'object' ? k.urunler : {};
@@ -525,6 +527,53 @@ export function anekdot(k, E, simdi) {
   else if (fark !== null && fark <= -20 && (E.gun || 0) >= 10) { o.ton = 'kotu'; o.personel = 'Hedef temposunun ' + yz(-fark) + ' gerisindesin; birkaç güçlü satışla hızla kapanır. Desteğe ihtiyacın olursa söyle.'; o.yonetici = ad + ' hedef temposunun ' + yz(-fark) + ' gerisinde. “Hayırdır, ne oldu?” — engel var mı, konuşun.'; }
   if (ind >= 3 && o.ton !== 'kotu') { o.yonetici += (o.yonetici ? ' ' : ad + ': ') + 'İndirim oranı ekibin ' + yz(ind) + ' üstünde, dikkat.'; }
   return o;
+}
+
+// ═══ V12.11: DESTEK EKİBİ ═══
+// Hak ediş = satış ekibi ortalaması × yüzde. Yüzde = min + (max−min) × skor/100; sonuç satış ekibinin EN DÜŞÜĞÜNDEN düşük, EN YÜKSEĞİNDEN yüksek olamaz.
+// Skor (0–100) = anket (satış ekibinin anonim puanları, 1–5) × ağırlık + yönetici görünüm/düzen puanı (1–5) × (100−ağırlık).
+export const DESTEK_SORU = [
+  { k: 'hiz', ad: 'Hız ve ulaşılabilirlik', ipucu: 'İhtiyacım olduğunda çabuk ilgilendi mi?' },
+  { k: 'isb', ad: 'Yardımseverlik ve işbirliği', ipucu: 'İşimi kolaylaştırdı, destek oldu mu?' },
+  { k: 'kalite', ad: 'İş kalitesi ve doğruluk', ipucu: 'Stok, teslimat, evrak işleri doğru ve eksiksiz mi?' },
+  { k: 'tutum', ad: 'İletişim ve tutum', ipucu: 'Güler yüzlü, saygılı ve çözüm odaklı mı?' },
+  { k: 'durust', ad: 'Doğru bilgi, net duruş', ipucu: 'Stok, indirim, teslim konusunda gerekirse “hayır” diyerek doğruyu söyledi mi?' }
+];
+export const destekAnketId = (ay, degerlendiren, destek) => ay + '__' + String(degerlendiren).toLowerCase() + '__' + String(destek).toLowerCase();
+export const destekYonId = (ay, destek) => 'yon__' + ay + '__' + String(destek).toLowerCase();
+const puan15 = v => { const n = Number(v); return n >= 1 && n <= 5 ? n : 0; };
+export function destekSkor(anketler, yon, ayar0) {
+  const A = ayarBirlestir(ayar0).destek, w = Math.min(100, Math.max(0, Number(A.anketAgirlik) || 0)) / 100;
+  const son = {}; (anketler || []).forEach(x => { if (x && x.e) son[String(x.e).toLowerCase()] = x; });   // değerlendiren başına son kayıt
+  const rs = [], sor = {}; DESTEK_SORU.forEach(s => { sor[s.k] = { t: 0, n: 0 }; });
+  Object.values(son).forEach(x => { const v = DESTEK_SORU.map(s => puan15(x.p && x.p[s.k])).filter(Boolean); if (!v.length) return; rs.push(v.reduce((a, c) => a + c, 0) / v.length); DESTEK_SORU.forEach(s => { const q = puan15(x.p && x.p[s.k]); if (q) { sor[s.k].t += q; sor[s.k].n++; } }); });
+  rs.sort((a, b) => a - b); const kes = rs.length >= 5 ? rs.slice(1, -1) : rs;   // 5+ kişide en yüksek ve en düşük puan atılır (tek kişinin etkisi kalmasın)
+  const n = rs.length, ort = kes.length ? kes.reduce((a, c) => a + c, 0) / kes.length : 0, anketSkor = n ? (ort - 1) / 4 * 100 : null;
+  const g = yon && puan15(yon.gorunum), yonSkor = g ? (g - 1) / 4 * 100 : null;
+  let skor, kaynak;
+  if (anketSkor === null && yonSkor === null) { skor = 70; kaynak = 'varsayilan'; }
+  else if (anketSkor === null) { skor = yonSkor; kaynak = 'yonetici'; }
+  else if (yonSkor === null) { skor = anketSkor; kaynak = 'anket'; }
+  else { const wa = n < 3 ? w * 0.5 : w; skor = (anketSkor * wa + yonSkor * (1 - w)) / (wa + (1 - w)); kaynak = 'karma'; }   // az kişi (1–2) puanladıysa anketin ağırlığı yarıya iner
+  const sorular = {}; DESTEK_SORU.forEach(s => { sorular[s.k] = sor[s.k].n ? r2(sor[s.k].t / sor[s.k].n) : null; });
+  return { skor: r2(skor), anketSkor: anketSkor === null ? null : r2(anketSkor), anketN: n, anketOrt: n ? r2(ort) : null, yonSkor: yonSkor === null ? null : r2(yonSkor), gorunum: g || null, kaynak, sorular };
+}
+// destekler: [{email, ad}] · anketler: tüm ay kayıtları [{d, e, p}] · yonMap: { [email]: { gorunum } }
+export function destekPrimleri(sonuc, ayar0, destekler, anketler, yonMap) {
+  const A = ayarBirlestir(ayar0).destek, K = (sonuc && sonuc.kisiler) || [];
+  let havuz = K.filter(k => Number(k.hakEdis) > 0); if (!havuz.length) havuz = K;
+  const v = havuz.map(k => Number(k.hakEdis) || 0), ort = v.length ? v.reduce((a, c) => a + c, 0) / v.length : 0, mn = v.length ? Math.min(...v) : 0, mx = v.length ? Math.max(...v) : 0;
+  const lo = Math.min(Number(A.min) || 0, Number(A.max) || 0), hi = Math.max(Number(A.min) || 0, Number(A.max) || 0);
+  return (destekler || []).map(d => {
+    const em = String(d.email).toLowerCase(), S = destekSkor((anketler || []).filter(x => String(x.d || '').toLowerCase() === em), (yonMap || {})[em], ayar0);
+    const yuzde = lo + (hi - lo) * S.skor / 100, ham = ort * yuzde / 100, tutar = r2(Math.min(mx, Math.max(mn, ham)));
+    return { email: em, ad: d.ad, ...S, yuzde: r2(yuzde), tutar, havuzOrt: r2(ort), havuzMin: r2(mn), havuzMax: r2(mx), sinirli: tutar !== r2(ham) };
+  });
+}
+export function destekOzeti(d, ay, simdi, ayar0) {
+  const pk = ayarBirlestir(ayar0).puanKatsayisi;
+  return { v: 1, destek: true, email: d.email, ad: d.ad, ay, guncelleme: simdi || Date.now(), hakEdis: d.tutar, puan: Math.round(d.tutar * pk), puanKatsayisi: pk,
+    skor: d.skor, anketSkor: d.anketSkor, anketN: d.anketN, yonSkor: d.yonSkor, gorunum: d.gorunum, kaynak: d.kaynak, sorular: d.sorular, yuzde: d.yuzde };
 }
 
 // V12.9: Haftalık ekip özeti (yönetici): son 7 gün / önceki 7 gün, yükselen-düşen kişiler
