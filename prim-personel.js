@@ -6,7 +6,7 @@
 //   · Satışa damga (window.Prim.damga) — app.js yalnız bunu çağırır
 //  CSS'ini kendi içine enjekte eder. Dil: personelin anlayacağı sade Türkçe.
 // ═══════════════════════════════════════════════════════════════
-import * as P from './prim.js?v=V12.12-20261125-0300';
+import * as P from './prim.js?v=V12.13-20261125-1310';
 export { P };
 
 const W = window;
@@ -331,6 +331,7 @@ function destekEkranHtml(o, ay) {
   return h;
 }
 function ekranHtml(o, ay) {
+  if (!o && rol() === 'destek' && AYAR.destek && AYAR.destek.aktif && AYAR.destek.deneme !== false) return '<div class="pm-bos">🧪<br><b>Destek puanı deneme döneminde</b><br>Anket ve değerlendirmeler toplanıyor; puanın yönetici açtığında burada görünür.</div>';
   if (!o) return '<div class="pm-bos">📭<br><b>' + esc(P.ayAdi(ay)) + '</b> için henüz skor hesaplanmadı.<br>Yönetici hesapladığında burada görünür.</div>';
   if (o.destek) return destekEkranHtml(o, ay);
   const pk = o.puanKatsayisi > 0 ? o.puanKatsayisi : puanKat(), pu = v => PUAN(v, pk), golge = !!o.golge, hedefVar = o.hedef > 0, onde = o.konumFark >= 0;

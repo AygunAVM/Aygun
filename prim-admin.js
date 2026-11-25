@@ -5,8 +5,8 @@
 //   Ayarlar : KDV, gam/ürün/sigorta oranları, ekstra prim, hedefler, dönem dağılımı, gölge mod
 //  Firestore: meta/primAyarlar · meta/primHedefler (yalnız Admin) · primOzet/{ay__eposta} (personel kendi dokümanını okur)
 // ═══════════════════════════════════════════════════════════════
-import * as P from './prim.js?v=V12.12-20261125-0300';
-import { esc, TL, TL2, PY, kopru, kullanici, yonetici, ayar, ayarYukle, ayarUygula, cssEkle } from './prim-personel.js?v=V12.12-20261125-0300';
+import * as P from './prim.js?v=V12.13-20261125-1310';
+import { esc, TL, TL2, PY, kopru, kullanici, yonetici, ayar, ayarYukle, ayarUygula, cssEkle } from './prim-personel.js?v=V12.13-20261125-1310';
 
 const W = window, $ = id => document.getElementById(id);
 const kok = () => $('admin-prim-body');
@@ -613,7 +613,7 @@ async function yayinla() {
     const simdi = Date.now(), liste = sonuc.kisiler;
     for (let i = 0; i < liste.length; i += 400) { const bt = b.writeBatch(b.db); liste.slice(i, i + 400).forEach(k => bt.set(b.doc(b.db, 'primOzet', P.ozetDocId(ay, k.email)), kopya(P.kisiOzeti(sonuc, k, simdi, ayar())))); await bt.commit(); }
     let dN = 0; if (ayar().destek && ayar().destek.aktif && ayar().destek.deneme === false) { try { await destekYukle(); const dl = destekHesap(), bt = b.writeBatch(b.db); dl.forEach(x => bt.set(b.doc(b.db, 'primOzet', P.ozetDocId(ay, x.email)), kopya(P.destekOzeti(x, ay, simdi, ayar())))); if (dl.length) await bt.commit(); dN = dl.length; } catch (e3) { mesaj += 'Destek özeti yazılamadı (' + (e3 && e3.message) + '). '; } }
-    mesaj += '✓ ' + liste.length + ' kişinin özeti yayınlandı' + (dN ? ' + ' + dN + ' destek' : '') + (bekleyenKayitlar.length ? ' (' + bekleyenKayitlar.length + ' bekleyen satış dahil)' : '') + '.';
+    mesaj += '✓ ' + liste.length + ' kişinin özeti yayınlandı' + (dN ? ' + ' + dN + ' destek' : '') + ((ayar().destek && ayar().destek.aktif && ayar().destek.deneme !== false) ? ' · ⚠ Destek puanı DENEME modunda: destek personeline yayınlanmadı (Ayarlar → Deneme modunu kapatın)' : '') + (bekleyenKayitlar.length ? ' (' + bekleyenKayitlar.length + ' bekleyen satış dahil)' : '') + '.';
   } catch (e) { hata = 'Yayınlanamadı: ' + (e && e.message) + (/permission/i.test(String(e && e.message)) ? ' — Firestore kuralları (Aşama H) yayınlanmamış olabilir.' : ''); }
   yeniden();
 }
