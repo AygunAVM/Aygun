@@ -496,8 +496,8 @@ export function rozet(kod) {
   if (rozetOnbellek.gun !== gun || rozetOnbellek.ayarZ !== ayarZaman) rozetOnbellek = { gun, harita: P.aktifEkstralar(AYAR, gun), ayarZ: ayarZaman };
   const l = rozetOnbellek.harita[String(kod).trim()]; if (!l) return '';
   const tek = l.filter(x => x.mod === 'tekil'), t = tek.length ? Math.max(...tek.map(x => x.tutar)) : l.reduce((a, x) => a + x.tutar, 0), bit = l.map(x => x.bit).filter(Boolean).sort()[0] || '';
-  const yaz = tek.length ? PN(PUAN(t)) + ' puan' + (bit ? ' · ' + kisaTarih(bit) + "'e kadar" : '') : SOZLUK.rozet(PN(PUAN(t)), bit ? kisaTarih(bit) : '');
-  return '<span class="pm-rozet' + (tek.length ? ' tekil' : '') + '" title="' + esc((l.map(x => x.ad).filter(Boolean).join(', ') || SOZLUK.rozetBaslik) + (tek.length ? ' · normal puan yerine' : ' · normal puanın üstüne')) + '">' + esc(yaz) + '</span>';
+  const yaz = tek.length ? PN(PUAN(t)) + ' puan' : SOZLUK.rozet(PN(PUAN(t)), bit ? kisaTarih(bit) : '');
+  return '<span class="pm-rozet' + (tek.length ? ' tekil' : '') + '" title="' + esc((l.map(x => x.ad).filter(Boolean).join(', ') || SOZLUK.rozetBaslik) + (tek.length ? ' · normal puan yerine' + (bit ? ' · ' + kisaTarih(bit) + "'e kadar" : '') : ' · normal puanın üstüne')) + '">' + esc(yaz) + '</span>';
 }
 // Vitrin ürün düğmesindeki sayı (Excel'deki ₺ değer → puan): app.js buradan çağırır; katsayı 1 yapılırsa eski görünüm
 export const puanYaz = v => PUAN(v);
